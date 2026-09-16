@@ -515,7 +515,6 @@ async def main() -> int:
         f"{subs[0].get('umo') if subs else ''}",
     )
 
-
     check(
         "群聊扫码会附带凭证警告",
         "GROUP_QR_WARNING" in dir(plugin_module)

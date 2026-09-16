@@ -1,11 +1,15 @@
 """Render every card template with realistic fixture data for visual checks."""
 
+import ast
 import asyncio
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from PIL import Image  # noqa: E402
 
 from core.cards import build_note_context, build_sanity_context  # noqa: E402
 from core.daily import (  # noqa: E402
@@ -15,6 +19,7 @@ from core.daily import (  # noqa: E402
     build_rogue_context,
     build_task_context,
 )
+from core.gacha import analyze  # noqa: E402
 from core.operators import (  # noqa: E402
     build_operator_context,
     build_roster_context,
@@ -206,10 +211,119 @@ PLAYER = {
 }
 
 
+def _help_sections() -> list[dict]:
+    """Read HELP_SECTIONS straight out of main.py.
+
+    Importing main would pull in astrbot, so the literal is parsed instead,
+    which keeps the preview and the shipped menu from drifting apart.
+
+    Returns:
+        The help card sections.
+    """
+    source = (Path(__file__).resolve().parents[1] / "main.py").read_text(
+        encoding="utf-8"
+    )
+    start = source.index("HELP_SECTIONS = [")
+    end = source.index("\n]\n", start) + 2
+    return ast.literal_eval(source[start + len("HELP_SECTIONS = ") : end])
+
+
+def _gacha_records() -> list[dict]:
+    """Build a small but realistic headhunting history.
+
+    Returns:
+        Records spanning a limited banner and a standard banner.
+    """
+    records: list[dict] = []
+    stamp = 1700000000
+    for index in range(45):
+        position = index + 1
+        six = {
+            10: ("char_1012_skadi2", "浊心斯卡蒂"),
+            30: ("char_000_other", "其他六星"),
+            44: ("char_1012_skadi2", "浊心斯卡蒂"),
+        }.get(index)
+        records.append(
+            {
+                "gachaTs": str(stamp + position * 60),
+                "pos": position,
+                "rarity": 5 if six else 2,
+                "charId": six[0] if six else "",
+                "charName": six[1] if six else "",
+                "poolId": "LIMITED_9_0_3",
+                "category": "1",
+            }
+        )
+    for index in range(28):
+        position = index + 1
+        six = {5: ("char_003_kalts", "凯尔希")}.get(index)
+        records.append(
+            {
+                "gachaTs": str(stamp + 100000 + position * 60),
+                "pos": position,
+                "rarity": 5 if six else 2,
+                "charId": six[0] if six else "",
+                "charName": six[1] if six else "",
+                "poolId": "NORM_0_1_1",
+                "category": "1",
+            }
+        )
+    return records
+
+
+ANNOUNCE_ITEMS = [
+    {
+        "id": "2819",
+        "title": "[活动预告]「逐影集趣」限时活动即将开启",
+        "author": "【明日方舟】运营组",
+        "group": "ACTIVITY",
+        "group_cn": "活动",
+        "url": "https://ak.hypergryph.com/news/2819",
+        "ts": 1789095600,
+        "date_text": "2026-09-15 11:00",
+    },
+    {
+        "id": "7367",
+        "title": "[明日方舟]09月11日16:00闪断更新公告",
+        "author": "【明日方舟】运营组",
+        "group": "SYSTEM",
+        "group_cn": "系统",
+        "url": "https://ak.hypergryph.com/news/7367",
+        "ts": 1789018800,
+        "date_text": "2026-09-11 11:00",
+    },
+    {
+        "id": "4923",
+        "title": "「月行水上」创作征集活动开启",
+        "author": "【明日方舟】运营组",
+        "group": "ACTIVITY",
+        "group_cn": "活动",
+        "url": "https://ak.hypergryph.com/news/4923",
+        "ts": 1788506400,
+        "date_text": "2026-09-04 12:00",
+    },
+]
+
+ANNOUNCE_BODY = (
+    "<p>一、「逐影集趣」限时活动开启</p>"
+    "<p>关卡开放时间：<strong>09月20日 16:00 - 09月30日 03:59</strong></p>"
+    "<p>解锁条件：通关主线 1-10</p>"
+    '<img src="https://web.hycdn.cn/upload/image/20260828/'
+    'eb03f1083fa59e528da66b2d0c50b629.jpg">'
+    "<p>活动说明：活动期间将开放「逐影集趣」限时活动，玩家可通过活动关卡作战"
+    "获取「摄影记录」，提升「逐影集趣」等级获取相应活动奖励。</p>"
+    "<p><strong>「摄影记录」开放时间：</strong>09月20日 16:00 - 09月30日 03:59</p>"
+    "<p><strong>「逐影集趣」主要奖励：</strong>活动头像「镜头下的她」、"
+    "活动家具、高级养成素材、作战记录、龙门币等</p>"
+)
+
+
 async def main() -> None:
     root = Path(__file__).resolve().parents[1]
     templates = root / "templates"
-    renderer = Renderer(templates, Path("/tmp/akrender"), 30000)
+    preview_dir = root / "docs" / "preview"
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    renderer = Renderer(templates, Path("/tmp/akrender"), 60000)
     base_css = (templates / "base.css").read_text(encoding="utf-8")
 
     note = build_note_context(PLAYER, now=NOW)
@@ -219,7 +333,35 @@ async def main() -> None:
     operator = find_operator(PLAYER["chars"], CHAR_INFO, "阿米娅")
     detail = build_operator_context(operator, PLAYER["equipmentInfoMap"])
 
+    gamedata = SimpleNamespace(
+        pool_name=lambda pid: {
+            "LIMITED_9_0_3": "限定寻访 · 遗愿焰火",
+            "NORM_0_1_1": "标准寻访",
+        }.get(pid, pid),
+        up_six=lambda pid: {
+            "LIMITED_9_0_3": ["char_1012_skadi2"],
+            "NORM_0_1_1": ["char_003_kalts"],
+        }.get(pid, []),
+    )
+    gacha = analyze(_gacha_records(), gamedata, {})
+    gacha.update(synced_text="2026-09-16 15:02", stored_total=246, just_synced=False)
+    announce_records = [{**item} for item in ANNOUNCE_ITEMS]
+    announce = {
+        "records": announce_records,
+        "total": 36,
+        "activity_count": 27,
+        "system_count": 9,
+    }
+    announce_detail = {
+        **ANNOUNCE_ITEMS[0],
+        "body_html": ANNOUNCE_BODY,
+        "image_total": 1,
+    }
+
     cards = [
+        # help.html reads a top-level "sections", unlike the other cards which
+        # nest their data under a single key
+        ("help.html", "sections", _help_sections()),
         ("note.html", "note", note),
         ("sanity.html", "sanity", sanity),
         ("operator_list.html", "roster", roster),
@@ -229,12 +371,31 @@ async def main() -> None:
         ("rogue.html", "rogue", build_rogue_context(PLAYER)),
         ("task.html", "task", build_task_context(PLAYER)),
         ("recruit.html", "recruit", build_recruit_context(PLAYER, now=NOW)),
+        ("gacha.html", "gacha", gacha),
+        ("announce.html", "announce", announce),
+        ("announce_detail.html", "announce", announce_detail),
     ]
     for template, key, context in cards:
         path = await renderer.render_html(
-            template, {"base_css": base_css, "version": "0.1.0", key: context}
+            template, {"base_css": base_css, "version": "0.2.0", key: context}
         )
-        print(f"{template} -> {path} ({path.stat().st_size if path else 0} bytes)")
+        if path is None:
+            print(f"{template} -> 渲染失败")
+            continue
+        # a README-sized copy, matching how the preview table lays them out;
+        # the render output is named render_<hash>.jpg, so the template name is
+        # what identifies the card
+        preview = (
+            preview_dir / f"{template.removesuffix('.html').replace('_', '-')}.jpg"
+        )
+        with Image.open(path) as image:
+            image = image.convert("RGB")
+            image.thumbnail((460, 4600))
+            image.save(preview, quality=86, optimize=True)
+        print(
+            f"{template} -> {path.name} ({path.stat().st_size} B) "
+            f"| 预览 {preview.name} ({preview.stat().st_size} B)"
+        )
     await renderer.close()
 
 

@@ -2,9 +2,14 @@
 
 | 文件 | 说明 |
 |---|---|
-| `ui-design.png` | 用 gpt-image-2.5 生成的 UI 设计稿（便签页），便签卡按此实现 |
-| `note-card.jpg` | 便签卡实际渲染效果 |
-| `announce-card.jpg` | 公告卡实际渲染效果（真实数据，22 条公告） |
-| `ui-prompt.md` | 生成 UI 设计稿用的提示词与调用方式 |
+| `help.jpg` 等 13 张 | **插件实际渲染输出**，由 `tests/render_preview.py` 用固定测试数据生成，README「功能预览」引用这些 |
+| `ui-design.png` | 用 gpt-image-2.5 生成的 UI 设计稿，卡片版式按此实现 |
+| `ui-prompt.md` | 生成设计稿与插件图标的提示词、调用方式与裁切经验 |
 
-> 这些图片仅作开发过程记录，不参与插件运行。
+## 重新生成预览图
+
+```bash
+python tests/render_preview.py
+```
+
+会用固定测试数据渲染全部卡片，并直接覆盖 `docs/preview/` 下的 README 尺寸预览图。

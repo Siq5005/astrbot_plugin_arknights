@@ -187,7 +187,43 @@ astrbot_plugin_arknights/
 
 ## 📸 功能预览
 
-> 预览图待补充。
+> 以下均为插件**实际渲染输出**，非设计稿。数据来自测试账号。
+
+<details open>
+<summary>点击展开全部预览图</summary>
+
+| `ark帮助` | `ark便签` |
+|:---:|:---:|
+| <img src="docs/preview/help.jpg" width="400"> | <img src="docs/preview/note.jpg" width="400"> |
+
+| `ark理智` | `ark干员 <名称>` |
+|:---:|:---:|
+| <img src="docs/preview/sanity.jpg" width="400"> | <img src="docs/preview/operator.jpg" width="400"> |
+
+| `ark干员列表` | `ark基建` |
+|:---:|:---:|
+| <img src="docs/preview/operator-list.jpg" width="400"> | <img src="docs/preview/building.jpg" width="400"> |
+
+| `ark剿灭` | `ark肉鸽` |
+|:---:|:---:|
+| <img src="docs/preview/campaign.jpg" width="400"> | <img src="docs/preview/rogue.jpg" width="400"> |
+
+| `ark任务` | `ark公招` |
+|:---:|:---:|
+| <img src="docs/preview/task.jpg" width="400"> | <img src="docs/preview/recruit.jpg" width="400"> |
+
+| `ark抽卡分析` | `ark公告` |
+|:---:|:---:|
+| <img src="docs/preview/gacha.jpg" width="400"> | <img src="docs/preview/announce.jpg" width="400"> |
+
+| `ark公告 <编号>` |
+|:---:|
+| <img src="docs/preview/announce-detail.jpg" width="360"> |
+
+</details>
+
+> 预览图由 `tests/render_preview.py` 一键重新生成：它会用固定测试数据渲染全部 13 张卡片，
+> 并直接导出 README 尺寸的 `docs/preview/*.jpg`。UI 设计稿见 `docs/preview/ui-design.png`。
 
 ---
 
