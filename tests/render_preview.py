@@ -2,6 +2,7 @@
 
 import ast
 import asyncio
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -9,7 +10,6 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from PIL import Image  # noqa: E402
 
 from core.cards import build_note_context, build_sanity_context  # noqa: E402
 from core.daily import (  # noqa: E402
@@ -382,16 +382,14 @@ async def main() -> None:
         if path is None:
             print(f"{template} -> 渲染失败")
             continue
-        # a README-sized copy, matching how the preview table lays them out;
-        # the render output is named render_<hash>.jpg, so the template name is
-        # what identifies the card
+        # Keep the renderer's native resolution. The README sets a small display
+        # width instead, so the file stays sharp on high-DPI screens; resizing
+        # here would throw away most of the detail for no benefit. The render
+        # output is named render_<hash>.jpg, so the template name identifies it.
         preview = (
             preview_dir / f"{template.removesuffix('.html').replace('_', '-')}.jpg"
         )
-        with Image.open(path) as image:
-            image = image.convert("RGB")
-            image.thumbnail((460, 4600))
-            image.save(preview, quality=86, optimize=True)
+        shutil.copyfile(path, preview)
         print(
             f"{template} -> {path.name} ({path.stat().st_size} B) "
             f"| 预览 {preview.name} ({preview.stat().st_size} B)"
