@@ -565,6 +565,36 @@ async def main() -> int:
     await plugin.unsubscribe_announce(StubEvent("/ark取消订阅公告")).__anext__()
     check("公告订阅可取消", not await plugin.store.list_announce_subs())
 
+    # CommandFilter only fires on an exact name or a name plus a space, so the
+    # no-space form needs its own alias; both must reach a forced sync.
+    check(
+        "抽卡同步的两种写法都已注册",
+        {"ark抽卡分析", "ark抽卡分析同步", "ark抽卡同步"}
+        <= set(plugin_module.ArknightsPlugin._HINT_CMDS),
+        f"{sorted(c for c in plugin_module.ArknightsPlugin._HINT_CMDS if '抽卡' in c)}",
+    )
+
+    captured: dict[str, bool] = {}
+
+    async def fake_gacha_records(event, force=False):
+        captured["force"] = force
+        return [], {}, {}, None
+
+    plugin._gacha_records = fake_gacha_records
+    for text, expected in (
+        ("/ark抽卡分析", False),
+        ("/ark抽卡分析 同步", True),
+        ("/ark抽卡分析同步", True),
+        ("/ark抽卡同步", True),
+        ("/ark抽卡分析 刷新", True),
+    ):
+        await drive(plugin.show_gacha(StubEvent(text)))
+        check(
+            f"{text} 强制同步={expected}",
+            captured.get("force") is expected,
+            f"实际 {captured.get('force')}",
+        )
+
     async def fake_authorization(token: str) -> str:
         return "auth-code"
 

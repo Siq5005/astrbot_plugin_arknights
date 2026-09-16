@@ -111,7 +111,7 @@ ark订阅公告 / ark取消订阅公告  新公告推送到当前会话
 【抽卡】
 ark抽卡分析          六星统计、保底与 UP 判定
 ark抽卡记录          最近的抽卡记录
-ark抽卡分析 同步     强制重新同步官网记录
+ark抽卡分析 同步     强制重新同步官网记录（也可写 ark抽卡同步）
 ark抽卡重置          清空本机保存的抽卡记录
 
 【签到与提醒】
@@ -164,7 +164,7 @@ HELP_SECTIONS = [
         "items": [
             {"cmd": "ark抽卡分析", "desc": "六星统计、保底与 UP 判定"},
             {"cmd": "ark抽卡记录", "desc": "最近的抽卡记录"},
-            {"cmd": "ark抽卡分析 同步", "desc": "强制重新同步官网记录"},
+            {"cmd": "ark抽卡分析 同步 / ark抽卡同步", "desc": "强制重新同步官网记录"},
             {"cmd": "ark抽卡重置", "desc": "清空本机保存的抽卡记录"},
         ],
     },
@@ -1369,11 +1369,16 @@ class ArknightsPlugin(Star):
             player = {}
         return cached["records"], player, state, None
 
-    @filter.command("ark抽卡分析")
+    @filter.command("ark抽卡分析", alias={"ark抽卡分析同步", "ark抽卡同步"})
     async def show_gacha(self, event: AstrMessageEvent):
         """Show the headhunting analysis card."""
-        args = self._args(event)
-        force = any(str(a) in {"同步", "刷新", "sync"} for a in args)
+        # CommandFilter only fires on an exact name or a name followed by a
+        # space, so "ark抽卡分析同步" needs its own alias; the intent is then read
+        # from the message rather than only from the parsed arguments.
+        raw = re.sub(r"\s+", "", event.message_str or "")
+        force = raw.endswith(("同步", "刷新", "sync")) or any(
+            str(arg) in {"同步", "刷新", "sync"} for arg in self._args(event)
+        )
         records, player, state, error = await self._gacha_records(event, force=force)
         if error:
             yield event.plain_result(error)
