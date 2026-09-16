@@ -144,13 +144,17 @@ def build_sanity_context(
 
 
 def build_note_context(
-    data: dict[str, Any], now: float | None = None
+    data: dict[str, Any],
+    now: float | None = None,
+    secretary_mode: str = "elite1",
 ) -> dict[str, Any]:
     """Build the account overview card context.
 
     Args:
         data: The ``data`` section of a player info response.
         now: Current unix timestamp; defaults to the system clock.
+        secretary_mode: Which assistant artwork to use; see
+            :func:`core.assets.secretary_portrait`.
 
     Returns:
         Template context for ``note.html``.
@@ -189,7 +193,7 @@ def build_note_context(
             "char_id": secretary_id,
             "name": str(secretary_meta.get("name") or secretary_id),
             "portrait": secretary_portrait(
-                secretary_id, str(secretary.get("skinId") or "")
+                secretary_id, str(secretary.get("skinId") or ""), secretary_mode
             ),
             "profession_icon": profession_icon(
                 str(secretary_meta.get("profession") or "")

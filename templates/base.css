@@ -246,3 +246,56 @@ body {
   color: var(--label);
   margin-bottom: 9px;
 }
+
+/* ---- design-mockup components ---------------------------------------- */
+/* Bordered section panels, as in the approved design: each block of the card
+   sits inside its own hairline frame instead of floating on the background. */
+.panel {
+  border: 1px solid var(--line);
+  padding: 12px 15px 14px;
+  margin-bottom: 14px;
+}
+
+.panel .section-title {
+  border-bottom: none;
+  padding-bottom: 2px;
+  margin-bottom: 6px;
+}
+
+.panel .row:last-child,
+.panel .progress:last-child {
+  border-bottom: none;
+}
+
+/* Decorative barcode strip for the card footer. */
+.barcode {
+  display: inline-block;
+  height: 15px;
+  width: 116px;
+  vertical-align: -3px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--label) 0 1px,
+    transparent 1px 3px,
+    var(--label) 3px 5px,
+    transparent 5px 7px,
+    var(--label) 7px 9px,
+    transparent 9px 13px
+  );
+  opacity: 0.5;
+}
+
+/* Small amber diagonal tick used at panel corners in the design. */
+.tick {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 46px;
+  height: 5px;
+  background: var(--accent);
+}
+
+.tick.right {
+  left: auto;
+  right: 0;
+}

@@ -16,6 +16,8 @@ image. See the README for source attribution.
 
 from __future__ import annotations
 
+from typing import Any
+
 ASSET_BASE = "https://torappu.prts.wiki/assets"
 ACESHIP_BASE = "https://cdn.jsdelivr.net/gh/Aceship/Arknight-Images@main"
 RESOURCE_BASE = "https://cdn.jsdelivr.net/gh/yuanyan3060/ArknightsGameResource@main"
@@ -214,28 +216,63 @@ def skin_portrait(skin_id: str) -> str:
     return f"{RESOURCE_BASE}/skin/{_quote(stem)}b.png"
 
 
-def secretary_portrait(char_id: str, skin_id: str = "") -> str:
+# Assistant artwork modes. ``random`` is the pool the user asked to keep for
+# later: it picks between the two promotion portraits plus the worn outfit, all
+# of which were probed and are known to resolve.
+SECRETARY_MODE_ELITE1 = "elite1"
+SECRETARY_MODE_ELITE2 = "elite2"
+SECRETARY_MODE_SKIN = "skin"
+SECRETARY_MODE_RANDOM = "random"
+
+
+def secretary_portrait(
+    char_id: str,
+    skin_id: str = "",
+    mode: str = SECRETARY_MODE_ELITE1,
+    rng: Any = None,
+) -> str:
     """Return the artwork to show for an assistant (助理) operator.
 
-    The assistant record always carries a skin id, and the promotion outfits use
-    the form ``{charId}#1`` / ``{charId}#2``, which map onto the plain promotion
-    portraits. Anything else is a named outfit and resolves through
-    :func:`skin_portrait`.
+    The default is the elite-1 portrait for every operator, which keeps the
+    assistant column visually consistent. Other modes are available through
+    configuration:
+
+    * ``elite1`` / ``elite2`` — always that promotion portrait.
+    * ``skin`` — the outfit the operator currently wears, falling back to elite 1.
+    * ``random`` — pick at random from the pool that actually exists for this
+      operator (both promotion portraits plus a named outfit when one is worn).
 
     Args:
         char_id: Internal operator id.
         skin_id: Skin the operator is currently wearing.
+        mode: One of the ``SECRETARY_MODE_*`` values.
+        rng: Optional ``random.Random`` used by the random mode, for tests.
 
     Returns:
-        Absolute image URL.
+        Absolute image URL, or an empty string when no operator was given.
     """
+    import random as _random
+
     char_id = str(char_id or "")
     skin_id = str(skin_id or "")
     if not char_id:
         return ""
-    if not skin_id:
+
+    named_skin = bool(skin_id) and not skin_id.startswith(f"{char_id}#")
+    if mode == SECRETARY_MODE_ELITE2:
         return char_portrait(char_id, 2)
-    if skin_id.startswith(f"{char_id}#"):
-        phase = skin_id.rsplit("#", 1)[-1]
-        return char_portrait(char_id, int(phase) if phase.isdigit() else 2)
-    return skin_portrait(skin_id)
+    if mode == SECRETARY_MODE_SKIN:
+        if named_skin:
+            return skin_portrait(skin_id)
+        return (
+            char_portrait(char_id, 2)
+            if skin_id.endswith("#2")
+            else char_portrait(char_id, 1)
+        )
+    if mode == SECRETARY_MODE_RANDOM:
+        pool = [char_portrait(char_id, 1), char_portrait(char_id, 2)]
+        if named_skin:
+            pool.append(skin_portrait(skin_id))
+        return (rng or _random).choice(pool)
+    # elite1 (default), and the fallback for any unknown mode
+    return char_portrait(char_id, 1)

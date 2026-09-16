@@ -11,9 +11,9 @@
         width: 100%;
       }
       .id-name {
-        font-size: 30px;
+        font-size: 31px;
         font-weight: 700;
-        letter-spacing: 1px;
+        letter-spacing: 1.5px;
       }
       .id-level {
         font-size: 12px;
@@ -22,32 +22,35 @@
       }
       .id-level b {
         color: var(--accent);
-        font-size: 23px;
+        font-size: 24px;
         margin-left: 7px;
       }
       .body {
         display: flex;
-        gap: 22px;
-        align-items: flex-start;
+        gap: 18px;
+        align-items: stretch;
       }
+      /* Assistant column: the artwork fills the whole column height and the
+         badge strip sits underneath, as in the approved design. */
       .assistant {
-        width: 268px;
+        width: 300px;
         flex: none;
+        display: flex;
+        flex-direction: column;
       }
       .assistant-art {
         position: relative;
+        flex: 1;
+        min-height: 430px;
         border: 1px solid var(--line);
         background: radial-gradient(
-            circle at 50% 18%,
-            rgba(255, 180, 0, 0.13) 0%,
-            rgba(255, 180, 0, 0) 62%
+            circle at 50% 22%,
+            rgba(255, 180, 0, 0.12) 0%,
+            rgba(255, 180, 0, 0) 64%
           ),
           linear-gradient(180deg, #1d222b 0%, #0e1013 100%);
-        height: 396px;
         overflow: hidden;
       }
-      /* contain keeps the whole half-body artwork visible instead of cropping
-         it to a narrow column */
       .assistant-art img {
         width: 100%;
         height: 100%;
@@ -55,49 +58,45 @@
         object-position: center bottom;
         display: block;
       }
-      .assistant-art::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 58px;
-        height: 5px;
-        background: var(--accent);
-      }
-      .assistant-meta {
+      .assistant-badge {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-top: 9px;
+        gap: 10px;
+        border: 1px solid var(--line);
+        border-top: none;
+        padding: 9px 12px;
+        background: var(--panel-alt);
       }
-      .assistant-meta img.cls {
-        width: 26px;
-        height: 26px;
+      .assistant-badge .cls {
+        width: 30px;
+        height: 30px;
         flex: none;
       }
-      .assistant-meta img.rank {
-        height: 19px;
+      .assistant-badge .rank {
+        height: 17px;
         flex: none;
       }
       .assistant-name {
-        font-size: 16px;
+        font-size: 17px;
         font-weight: 700;
         letter-spacing: 0.5px;
       }
       .assistant-role {
-        font-size: 10px;
+        font-size: 9.5px;
         color: var(--muted);
-        letter-spacing: 1.6px;
+        letter-spacing: 1.8px;
+        margin-top: 1px;
       }
       .signature {
         margin-top: 9px;
         padding: 9px 11px;
-        border-left: 2px solid var(--line);
+        border: 1px solid var(--line);
+        border-left: 2px solid var(--accent);
         background: #14161b;
         font-size: 12px;
         color: var(--label);
         line-height: 1.55;
-        max-height: 82px;
+        max-height: 76px;
         overflow: hidden;
       }
       .right {
@@ -106,33 +105,45 @@
       }
       .stat-strip {
         display: flex;
-        margin-bottom: 18px;
+        margin-bottom: 14px;
         border: 1px solid var(--line);
       }
       .stat-cell {
         flex: 1;
-        padding: 9px 12px;
+        padding: 10px 13px;
         border-right: 1px solid var(--line);
       }
       .stat-cell:last-child {
         border-right: none;
       }
       .stat-key {
-        font-size: 10.5px;
+        font-size: 11px;
         color: var(--muted);
-        letter-spacing: 1.3px;
+        letter-spacing: 1.4px;
       }
       .stat-val {
-        font-size: 18px;
+        font-size: 21px;
         font-weight: 700;
         margin-top: 4px;
       }
       .assist-op {
-        width: 76px;
+        width: 104px;
       }
       .assist-op img {
-        width: 70px;
-        height: 70px;
+        width: 98px;
+        height: 98px;
+      }
+      .assist-op .name {
+        font-size: 11.5px;
+        color: var(--text);
+      }
+      .assist-op .lv {
+        font-size: 10.5px;
+        color: var(--muted);
+        letter-spacing: 0.5px;
+      }
+      .serial {
+        letter-spacing: 1.2px;
       }
     </style>
   </head>
@@ -152,17 +163,20 @@
             {% if note.secretary.portrait %}
             <img src="{{ note.secretary.portrait }}" alt="{{ note.secretary.name }}" />
             {% endif %}
+            <span class="tick"></span>
           </div>
-          <div class="assistant-meta">
+          <div class="assistant-badge">
             {% if note.secretary.profession_icon %}
             <img class="cls" src="{{ note.secretary.profession_icon }}" alt="" />
             {% endif %}
+            <span>
+              <span class="assistant-name">{{ note.secretary.name or "未设置助理" }}</span>
+              <span class="assistant-role">ASSISTANT</span>
+            </span>
             {% if note.secretary.rarity_icon %}
-            <img class="rank" src="{{ note.secretary.rarity_icon }}" alt="" />
+            <img class="rank" src="{{ note.secretary.rarity_icon }}" alt="" style="margin-left: auto" />
             {% endif %}
-            <span class="assistant-name">{{ note.secretary.name or "未设置助理" }}</span>
           </div>
-          <div class="assistant-role">ASSISTANT</div>
           {% if note.signature %}
           <div class="signature">{{ note.signature }}</div>
           {% endif %}
@@ -181,19 +195,19 @@
           </div>
           <div class="stat-strip">
             <div class="stat-cell">
-              <div class="stat-key">干员数</div>
+              <div class="stat-key">干员数量</div>
               <div class="stat-val">{{ note.char_count }}</div>
             </div>
             <div class="stat-cell">
-              <div class="stat-key">时装数</div>
+              <div class="stat-key">时装数量</div>
               <div class="stat-val">{{ note.skin_count }}</div>
             </div>
           </div>
 
-          <div class="section">
+          <div class="panel">
             <div class="section-title">理智</div>
             <div class="row">
-              <span class="row-label">当前</span>
+              <span class="row-label">当前理智</span>
               <span class="row-value accent">
                 {{ note.sanity.current }}
                 <span style="color: var(--muted); font-weight: 400">
@@ -204,13 +218,13 @@
             <div class="progress">
               <div class="progress-fill" style="width: {{ note.sanity.percent }}%"></div>
             </div>
-            <div class="row" style="border-bottom: none">
+            <div class="row">
               <span class="row-label">恢复</span>
               <span class="row-value">{{ note.sanity.remaining_text }}</span>
             </div>
           </div>
 
-          <div class="section">
+          <div class="panel">
             <div class="section-title">进度</div>
             {% for item in [{"label": "每日任务", "node": note.daily},
                             {"label": "每周任务", "node": note.weekly},
@@ -224,28 +238,34 @@
             </div>
             {% endfor %}
           </div>
-        </div>
-      </div>
 
-      <div class="section">
-        <div class="section-title">助战干员</div>
-        {% if note.assist %}
-        <div class="grid">
-          {% for op in note.assist %}
-          <div class="tile assist-op">
-            <img src="{{ op.avatar }}" alt="{{ op.name }}" />
-            <div class="name">{{ op.name }}</div>
+          <div class="panel" style="margin-bottom: 0">
+            <div class="section-title">助战干员</div>
+            {% if note.assist %}
+            <div class="grid">
+              {% for op in note.assist %}
+              <div class="tile assist-op">
+                <img src="{{ op.avatar }}" alt="{{ op.name }}" />
+                <div class="name">{{ op.name }}</div>
+                <div class="lv">Lv.{{ op.level }}</div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty">未设置助战干员</div>
+            {% endif %}
           </div>
-          {% endfor %}
         </div>
-        {% else %}
-        <div class="empty">未设置助战干员</div>
-        {% endif %}
       </div>
 
       <div class="card-footer">
-        <span>数据时间 {{ note.data_time }}</span>
-        <span>SNAPSHOT / SKLAND</span>
+        <span>© HYPERGRYPH · 数据时间 {{ note.data_time }}</span>
+        <span>
+          <span class="barcode"></span>
+          <span class="serial">
+            RI-{{ note.register_date | replace("-", "") }}-{{ note.level }}
+          </span>
+        </span>
       </div>
     </div>
   </body>

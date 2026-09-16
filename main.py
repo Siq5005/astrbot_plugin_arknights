@@ -281,6 +281,20 @@ class ArknightsPlugin(Star):
 
     # ── helpers ───────────────────────────────────────────────────────────
 
+    def _secretary_mode(self) -> str:
+        """Map the configured assistant-artwork label to an asset mode.
+
+        Returns:
+            One of the ``secretary_portrait`` mode strings.
+        """
+        mapping = {
+            "精一立绘": "elite1",
+            "精二立绘": "elite2",
+            "当前时装": "skin",
+            "随机图池": "random",
+        }
+        return mapping.get(str(self.config.get("secretary_art") or ""), "elite1")
+
     async def _render(self, template: str, data: dict[str, Any]) -> Path | None:
         """Render a card image.
 
@@ -712,7 +726,7 @@ class ArknightsPlugin(Star):
         except SklandError as exc:
             yield event.plain_result(await self._report_query_error(event, exc))
             return
-        note = build_note_context(data)
+        note = build_note_context(data, secretary_mode=self._secretary_mode())
         image = await self._render("note.html", {"note": note})
         if image is None:
             yield event.plain_result(self._note_text(note))
