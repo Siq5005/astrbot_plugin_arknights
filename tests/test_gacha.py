@@ -290,3 +290,146 @@ def test_analyze_handles_missing_fields():
     assert ctx["total"] == 2
     assert ctx["counts"][3] == 2
     assert ctx["counts"][6] == 0
+
+
+@pytest.mark.anyio
+async def test_records_from_different_categories_are_not_deduped():
+    """The cursor pair is only unique within a category.
+
+    Two categories can both report (gachaTs=100, pos=0). Keying the dedupe on
+    the cursor alone silently dropped one of them, which under-counted every
+    statistic downstream — the failure mode reported for special banners.
+    """
+
+    def handler(request):
+        path = request.url.path
+        if path.endswith("/grant"):
+            return httpx.Response(200, json={"status": 0, "data": {"token": "g"}})
+        if path.endswith("u8_token_by_uid"):
+            return httpx.Response(200, json={"code": 0, "data": {"token": "r"}})
+        if path.endswith("/role/login"):
+            return httpx.Response(
+                200,
+                json={"code": 0},
+                headers={"set-cookie": "ak-user-center=CK; Path=/"},
+            )
+        if path.endswith("/gacha/cate"):
+            return httpx.Response(
+                200, json={"code": 0, "data": [{"id": "normal"}, {"id": "special"}]}
+            )
+        if path.endswith("/gacha/history"):
+            category = dict(request.url.params).get("category")
+            # identical cursor pair, different character per category
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "data": {
+                        "list": [
+                            {
+                                "gachaTs": 100,
+                                "pos": 0,
+                                "rarity": 5,
+                                "charId": f"char_{category}",
+                                "poolId": "NORM_0_1_1",
+                            }
+                        ]
+                    },
+                },
+            )
+        raise AssertionError(f"unexpected path {path}")
+
+    records = await _client(handler).fetch_records("pass", "uid1")
+    assert len(records) == 2
+    assert {record["category"] for record in records} == {"normal", "special"}
+
+
+def _pool_record(ts, rarity, pool_id, char_id="", pos=0):
+    return {
+        "gachaTs": ts,
+        "pos": pos,
+        "rarity": rarity,
+        "charId": char_id,
+        "poolId": pool_id,
+        "poolName": "",
+    }
+
+
+def test_analyze_splits_banners_and_tracks_pity_per_family():
+    """Pity must be per banner family, not one running total across banners."""
+    records = [
+        # standard banner: six star on the 2nd pull, then 3 more pulls
+        _pool_record(10, 2, "NORM_0_1_1"),
+        _pool_record(20, 5, "NORM_0_1_1", "char_A"),
+        _pool_record(30, 2, "NORM_0_1_1"),
+        _pool_record(40, 2, "NORM_0_1_1"),
+        _pool_record(50, 2, "NORM_0_1_1"),
+        # limited banner: six star on the 1st pull of *that* banner
+        _pool_record(60, 5, "LIMITED_9_0_3", "char_B"),
+        _pool_record(70, 2, "LIMITED_9_0_3"),
+    ]
+    ctx = analyze(records)
+    assert ctx["total"] == 7
+    assert ctx["six_total"] == 2
+    # globally the newest six star is followed by one pull
+    assert ctx["pity"] == 1
+
+    by_label = {banner["label"]: banner for banner in ctx["banners"]}
+    assert set(by_label) == {"标准寻访", "限定寻访"}
+    assert by_label["标准寻访"]["total"] == 5
+    # within the standard family the latest six star is the 2nd pull, and three
+    # pulls follow it
+    assert by_label["标准寻访"]["pity"] == 3
+    assert by_label["标准寻访"]["six_total"] == 1
+    assert by_label["限定寻访"]["total"] == 2
+    assert by_label["限定寻访"]["pity"] == 1
+    assert ctx["banner_count"] == 2
+    # newest family first
+    assert ctx["banners"][0]["label"] == "限定寻访"
+
+
+def test_analyze_does_not_count_off_rate_without_up_data():
+    """A pool with no rate-up table must not be scored as an off-rate."""
+
+    class NoUp:
+        @staticmethod
+        def pool_name(pool_id):
+            return pool_id
+
+        @staticmethod
+        def up_six(pool_id):
+            return []
+
+    records = [
+        _pool_record(10, 5, "SPECIAL_54_0_5", "char_A"),
+        _pool_record(20, 5, "SPECIAL_54_0_5", "char_B"),
+    ]
+    ctx = analyze(records, gamedata=NoUp())
+    assert ctx["up_known"] is False
+    assert ctx["up_hits"] == 0
+    assert ctx["off_rate"] == 0
+    assert all(item["is_up"] is None for item in ctx["six_stars"])
+
+
+def test_analyze_scores_up_for_joint_banner_with_multiple_six_stars():
+    """Joint banners list several six stars; all of them count as UP."""
+
+    class Joint:
+        @staticmethod
+        def pool_name(pool_id):
+            return "联合作战寻访"
+
+        @staticmethod
+        def up_six(pool_id):
+            return ["char_A", "char_B", "char_C"]
+
+    records = [
+        _pool_record(10, 5, "SPECIAL_54_0_5", "char_A"),
+        _pool_record(20, 5, "SPECIAL_54_0_5", "char_C"),
+    ]
+    ctx = analyze(records, gamedata=Joint())
+    assert ctx["up_known"] is True
+    assert ctx["up_hits"] == 2
+    assert ctx["off_rate"] == 0
+    assert ctx["banners"][0]["label"] == "定向甄选"
+    assert ctx["luck"] in {"欧皇", "偏欧", "平稳", "偏非", "非酋"}

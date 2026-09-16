@@ -1,14 +1,53 @@
-"""URL builders for official Arknights game assets.
+"""URL builders for Arknights game assets.
 
-Assets are served by the PRTS Wiki mirror of the game resource bundle at
-``torappu.prts.wiki``, which was verified to serve operator avatars, elite
-portraits and skill icons. Only paths that were actually confirmed are exposed
-here; anything else is rendered as text instead of guessing a URL.
+Three verified sources are used, each chosen for what it actually serves:
+
+* ``torappu.prts.wiki/assets`` — the official resource bundle: operator avatars,
+  promotion portraits and skill icons.
+* ``Aceship/Arknight-Images`` — profession badges, promotion/potential/rarity
+  marks, infrastructure icons and skin portraits.
+* ``yuanyan3060/ArknightsGameResource`` — skin artwork, item rarity frames and
+  base-skill icons.
+
+Every path here was probed before being added; nothing is guessed. Assets that
+cannot be resolved fall back to text in the templates rather than to a broken
+image. See the README for source attribution.
 """
 
 from __future__ import annotations
 
 ASSET_BASE = "https://torappu.prts.wiki/assets"
+ACESHIP_BASE = "https://cdn.jsdelivr.net/gh/Aceship/Arknight-Images@main"
+RESOURCE_BASE = "https://cdn.jsdelivr.net/gh/yuanyan3060/ArknightsGameResource@main"
+
+# charInfoMap profession -> Aceship class badge file stem.
+PROFESSION_ICON: dict[str, str] = {
+    "PIONEER": "class_vanguard",
+    "WARRIOR": "class_guard",
+    "TANK": "class_defender",
+    "SNIPER": "class_sniper",
+    "CASTER": "class_caster",
+    "MEDIC": "class_medic",
+    "SUPPORT": "class_supporter",
+    "SPECIAL": "class_specialist",
+}
+
+# Facility key -> Aceship infrastructure icon file stem.
+FACILITY_ICON: dict[str, str] = {
+    "power": "power",
+    "manufacture": "manu",
+    "trading": "trade",
+    "dormitory": "dorm",
+    "control": "control",
+    "meeting": "meet",
+    "hire": "hire",
+    "training": "train",
+}
+
+
+def _quote(segment: str) -> str:
+    """Percent-encode the characters that appear in game asset file names."""
+    return segment.replace("#", "%23")
 
 
 def char_avatar(char_id: str) -> str:
@@ -20,11 +59,11 @@ def char_avatar(char_id: str) -> str:
     Returns:
         Absolute image URL.
     """
-    return f"{ASSET_BASE}/char_avatar/{char_id}.png"
+    return f"{ASSET_BASE}/char_avatar/{_quote(char_id)}.png"
 
 
 def char_portrait(char_id: str, phase: int = 2) -> str:
-    """Return the half-body portrait URL for an operator.
+    """Return the half-body promotion portrait URL for an operator.
 
     Args:
         char_id: Internal operator id.
@@ -33,7 +72,7 @@ def char_portrait(char_id: str, phase: int = 2) -> str:
     Returns:
         Absolute image URL.
     """
-    return f"{ASSET_BASE}/char_portrait/{char_id}_{phase}.png"
+    return f"{ASSET_BASE}/char_portrait/{_quote(char_id)}_{phase}.png"
 
 
 def skill_icon(skill_id: str) -> str:
@@ -45,4 +84,131 @@ def skill_icon(skill_id: str) -> str:
     Returns:
         Absolute image URL.
     """
-    return f"{ASSET_BASE}/skill_icon/skill_icon_{skill_id}.png"
+    return f"{ASSET_BASE}/skill_icon/skill_icon_{_quote(skill_id)}.png"
+
+
+def profession_icon(profession: str) -> str:
+    """Return the class badge URL for a profession.
+
+    Args:
+        profession: ``charInfoMap`` profession value, e.g. ``CASTER``.
+
+    Returns:
+        Absolute image URL, or an empty string for an unknown profession.
+    """
+    stem = PROFESSION_ICON.get(str(profession or "").upper())
+    return f"{ACESHIP_BASE}/classes/{stem}.png" if stem else ""
+
+
+def rarity_icon(stars: int) -> str:
+    """Return the rarity mark URL.
+
+    Args:
+        stars: Star rating from 1 to 6.
+
+    Returns:
+        Absolute image URL, or an empty string when out of range.
+    """
+    return f"{ACESHIP_BASE}/ui/rank/{stars}.png" if 1 <= stars <= 6 else ""
+
+
+def elite_icon(phase: int) -> str:
+    """Return the promotion (精英化) mark URL.
+
+    Args:
+        phase: Promotion phase, ``0`` to ``2``.
+
+    Returns:
+        Absolute image URL, or an empty string when out of range.
+    """
+    return f"{ACESHIP_BASE}/ui/elite/{phase}.png" if 0 <= phase <= 2 else ""
+
+
+def potential_icon(rank: int) -> str:
+    """Return the potential (潜能) mark URL.
+
+    Args:
+        rank: Potential rank from 1 to 5.
+
+    Returns:
+        Absolute image URL, or an empty string when out of range.
+    """
+    return f"{ACESHIP_BASE}/ui/potential/{rank}.png" if 1 <= rank <= 5 else ""
+
+
+def facility_icon(key: str) -> str:
+    """Return the infrastructure icon URL for a facility.
+
+    Args:
+        key: Facility key used by :func:`core.daily.build_building_context`.
+
+    Returns:
+        Absolute image URL, or an empty string for an unknown facility.
+    """
+    stem = FACILITY_ICON.get(str(key or ""))
+    return f"{ACESHIP_BASE}/ui/infrastructure/{stem}.png" if stem else ""
+
+
+def item_rarity_frame(rarity: int) -> str:
+    """Return the item rarity frame URL.
+
+    Args:
+        rarity: Item rarity from 1 to 6.
+
+    Returns:
+        Absolute image URL, or an empty string when out of range.
+    """
+    if not 1 <= rarity <= 6:
+        return ""
+    return f"{RESOURCE_BASE}/item_rarity_img/sprite_item_r{rarity}.png"
+
+
+def item_icon(icon_id: str) -> str:
+    """Return the icon URL for an item.
+
+    Args:
+        icon_id: ``itemId`` or ``iconId`` from the game data, e.g. ``3003``.
+
+    Returns:
+        Absolute image URL, or an empty string when the id is blank.
+    """
+    return f"{ACESHIP_BASE}/items/{_quote(icon_id)}.png" if icon_id else ""
+
+
+def building_skill_icon(skill_id: str) -> str:
+    """Return the base-skill icon URL.
+
+    Args:
+        skill_id: Base skill id, e.g. ``bskill_ctrl_amiya``.
+
+    Returns:
+        Absolute image URL, or an empty string when the id is blank.
+    """
+    if not skill_id:
+        return ""
+    return f"{RESOURCE_BASE}/building_skill/{_quote(skill_id)}.png"
+
+
+def skin_portrait(skin_id: str) -> str:
+    """Return the artwork URL for an operator skin.
+
+    Skin ids look like ``char_002_amiya#2`` (a promotion outfit) or
+    ``char_002_amiya@winter#1`` (a named outfit). The resource bundle stores
+    them as ``char_002_amiya_2b.png`` and ``char_002_amiya_winter#1b.png``
+    respectively, so the ``@`` becomes an underscore and a bare promotion index
+    swaps its ``#`` for an underscore too.
+
+    Args:
+        skin_id: Skin id from the player info payload.
+
+    Returns:
+        Absolute image URL, or an empty string when the id is blank.
+    """
+    skin_id = str(skin_id or "")
+    if not skin_id:
+        return ""
+    if "@" in skin_id:
+        stem = skin_id.replace("@", "_", 1)
+    else:
+        stem = skin_id.replace("#", "_", 1)
+    return f"{RESOURCE_BASE}/skin/{_quote(stem)}b.png"

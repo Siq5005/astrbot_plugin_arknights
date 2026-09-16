@@ -64,12 +64,39 @@ def test_parse_meta():
     assert meta["LIMITED_1"]["open_time"] == 0
 
 
-def test_parse_up_prefers_up_char_info():
+def test_parse_up_uses_only_up_char_info():
     up = GameData._parse_up(UP)
     assert up["NORM_0_1_1"]["six"] == ["char_103_angel"]
     assert up["NORM_0_1_1"]["five"] == ["char_171_bldsk"]
-    # pools without upCharInfo still resolve from availCharInfo
-    assert up["AVAIL_ONLY"]["six"] == ["char_999_x"]
+    # availCharInfo lists everything the pool offers, not the rate-up, so a
+    # pool without upCharInfo must report no UP data at all. Treating the
+    # available list as UP zeroed the off-rate on special banners.
+    assert "AVAIL_ONLY" not in up
+
+
+def test_parse_up_collects_every_entry_and_every_character():
+    payload = {
+        "gachaPoolClient": [
+            {
+                "gachaPoolId": "JOINT_1",
+                "gachaPoolDetail": {
+                    "detailInfo": {
+                        "upCharInfo": {
+                            "perCharList": [
+                                {"rarityRank": 5, "charIdList": ["a", "b"]},
+                                {"rarityRank": 5, "charIdList": ["c"]},
+                                {"rarityRank": 4, "charIdList": ["d"]},
+                                {"rarityRank": 4, "charIdList": ["e"]},
+                            ]
+                        }
+                    }
+                },
+            }
+        ]
+    }
+    up = GameData._parse_up(payload)
+    assert up["JOINT_1"]["six"] == ["a", "b", "c"]
+    assert up["JOINT_1"]["five"] == ["d", "e"]
 
 
 def test_parse_up_accepts_a_bare_list():
@@ -168,3 +195,15 @@ async def test_corrupt_cache_is_ignored(tmp_path):
     assert await data.ensure() is True
     assert len(calls) == 2
     assert json.loads((tmp_path / "gacha_meta.json").read_text())["gachaPoolClient"]
+
+
+def test_banner_group_classifies_by_prefix():
+    from core.gamedata import UNKNOWN_BANNER_LABEL, banner_group
+
+    assert banner_group("LIMITED_9_0_3")[1] == "限定寻访"
+    assert banner_group("CLASSIC_DOUBLE_59_0_1")[1] == "中坚双UP寻访"
+    assert banner_group("CLASSIC_37_0_1")[1] == "中坚寻访"
+    assert banner_group("SPECIAL_54_0_5")[1] == "定向甄选"
+    assert banner_group("NORM_0_1_1")[1] == "标准寻访"
+    assert banner_group("")[1] == UNKNOWN_BANNER_LABEL
+    assert banner_group("SOMETHING_NEW")[1] == UNKNOWN_BANNER_LABEL

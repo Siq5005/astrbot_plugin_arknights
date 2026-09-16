@@ -198,13 +198,22 @@ class GameData:
 
     @staticmethod
     def _parse_up(payload: Any) -> dict[str, dict[str, list[str]]]:
-        """Extract UP-character lists from the PRTS table.
+        """Extract the rate-up character lists from the PRTS table.
+
+        Only ``upCharInfo`` describes rate-up. ``availCharInfo`` lists every
+        character obtainable from the pool (a normal banner advertises ten or
+        more six stars there), so treating it as rate-up made every pull look
+        like an UP hit and silently zeroed the off-rate — most visibly on the
+        special banners that carry no ``upCharInfo`` at all. Pools without
+        ``upCharInfo`` are therefore reported as having no UP data, and the
+        analysis skips their UP judgement instead of inventing one.
 
         Args:
             payload: Parsed PRTS ``gacha_table.json``.
 
         Returns:
-            Mapping of pool id to ``{"six": [...], "five": [...]}``.
+            Mapping of pool id to ``{"six": [...], "five": [...]}``. Pools with
+            no rate-up data are omitted.
         """
         if isinstance(payload, list):
             pools = payload
@@ -224,15 +233,18 @@ class GameData:
             info = detail.get("detailInfo") or {}
             six: list[str] = []
             five: list[str] = []
-            for source in (info.get("upCharInfo"), info.get("availCharInfo")):
-                per_list = (source or {}).get("perCharList") or []
-                for entry in per_list:
-                    rank = entry.get("rarityRank")
-                    chars = [str(c) for c in entry.get("charIdList") or []]
-                    if rank == SIX_STAR_RARITY and not six:
-                        six = chars
-                    elif rank == FIVE_STAR_RARITY and not five:
-                        five = chars
+            # A single entry may carry several characters (joint banners list
+            # three or more six stars in one entry), so collect every entry
+            # rather than only the first.
+            for entry in (info.get("upCharInfo") or {}).get("perCharList") or []:
+                if not isinstance(entry, dict):
+                    continue
+                rank = entry.get("rarityRank")
+                chars = [str(c) for c in entry.get("charIdList") or []]
+                if rank == SIX_STAR_RARITY:
+                    six.extend(chars)
+                elif rank == FIVE_STAR_RARITY:
+                    five.extend(chars)
             if six or five:
                 result[pool_id] = {"six": six, "five": five}
         return result
@@ -251,3 +263,45 @@ class GameData:
     def up_six(self, pool_id: str) -> list[str]:
         """Return the UP six-star operator ids for a pool."""
         return list((self.pool_up.get(pool_id) or {}).get("six") or [])
+
+
+# Banner families are recognised from the pool id prefix. The prefixes below
+# were read straight out of the live table, so the grouping does not depend on
+# guessing what each ``gachaRuleType`` number means. Order matters: the most
+# specific prefix must be tested first.
+BANNER_GROUPS: tuple[tuple[str, str], ...] = (
+    ("CLASSIC_DOUBLE_", "中坚双UP寻访"),
+    ("CLASSIC_ATTAIN_", "中坚跨年欢庆"),
+    ("FESCLASSIC_", "中坚FES寻访"),
+    ("CLASSIC_", "中坚寻访"),
+    ("LIMITED_", "限定寻访"),
+    ("LINKAGE_", "联动寻访"),
+    ("ATTAIN_", "跨年欢庆寻访"),
+    ("SINGLE_", "单UP寻访"),
+    ("DOUBLE_", "双UP寻访"),
+    ("SPECIAL_", "定向甄选"),
+    ("RETURN_", "归航寻访"),
+    ("NORM_", "标准寻访"),
+)
+
+UNKNOWN_BANNER_LABEL = "其他寻访"
+
+
+def banner_group(pool_id: str) -> tuple[str, str]:
+    """Classify a pool into a banner family.
+
+    Pity and the six-star sequence are tracked per banner family in game, so the
+    analysis groups records the same way instead of mixing every banner into one
+    running total.
+
+    Args:
+        pool_id: Pool identifier from a gacha record.
+
+    Returns:
+        Tuple of the group key and its display label.
+    """
+    text = str(pool_id or "")
+    for prefix, label in BANNER_GROUPS:
+        if text.startswith(prefix):
+            return prefix, label
+    return "", UNKNOWN_BANNER_LABEL

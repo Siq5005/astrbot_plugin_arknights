@@ -22,6 +22,8 @@ from typing import Any
 
 import httpx
 
+from .gamedata import banner_group
+
 logger = logging.getLogger(__name__)
 
 AS_BASE = "https://as.hypergryph.com"
@@ -329,7 +331,11 @@ class GachaClient:
         cookie = await self.center_cookie(role)
         categories = await self.categories(uid, passport_token, role, cookie)
 
-        collected: dict[tuple[Any, Any], dict[str, Any]] = {}
+        # The cursor pair is only unique within one category: two categories can
+        # legitimately report the same (gachaTs, pos), so the category has to be
+        # part of the key or genuine pulls get silently dropped and every
+        # statistic downstream under-counts.
+        collected: dict[tuple[Any, Any, Any], dict[str, Any]] = {}
         for category in categories:
             gacha_ts: str | None = None
             pos: int | None = None
@@ -338,8 +344,10 @@ class GachaClient:
                     uid, category, passport_token, role, cookie, gacha_ts, pos
                 )
                 for record in page:
-                    key = (record.get("gachaTs"), record.get("pos"))
-                    collected.setdefault(key, record)
+                    item = dict(record)
+                    item["category"] = category
+                    key = (category, record.get("gachaTs"), record.get("pos"))
+                    collected.setdefault(key, item)
                 if not more or not page:
                     break
                 last = page[-1]
@@ -397,38 +405,79 @@ def _stars(record: dict[str, Any]) -> int:
     return max(3, min(6, rarity + 1))
 
 
-def analyze(
-    records: list[dict[str, Any]],
-    gamedata: Any = None,
-    char_info: dict[str, Any] | None = None,
-    recent_limit: int = 12,
-) -> dict[str, Any]:
-    """Compute headhunting statistics.
-
-    Records are ordered oldest first internally so the six-star sequence and the
-    pity counter are meaningful; the returned six-star list is newest first.
+def _six_star_identity(
+    record: dict[str, Any], char_info: dict[str, Any]
+) -> tuple[str, str]:
+    """Resolve a six-star record into its id and display name.
 
     Args:
-        records: Records as returned by :meth:`GachaClient.fetch_records`.
-        gamedata: Optional :class:`~core.gamedata.GameData` for pool and UP names.
-        char_info: Optional ``charInfoMap`` used to resolve operator names.
-        recent_limit: How many recent six stars to include.
+        record: Raw gacha record.
+        char_info: ``charInfoMap`` used to name operators the record omits.
 
     Returns:
-        Analysis context for ``gacha.html``.
+        Tuple of operator id and display name.
     """
-    char_info = char_info or {}
-    ordered = sorted(
-        records or [],
-        key=lambda item: (int(item.get("gachaTs") or 0), int(item.get("pos") or 0)),
-    )
+    char_id = str(record.get("charId") or "")
+    name = str(record.get("charName") or "")
+    if not name:
+        name = str((char_info.get(char_id) or {}).get("name") or char_id)
+    return char_id, name
 
+
+def _luck_label(avg_six: float, six_total: int) -> str:
+    """Describe how lucky a banner was.
+
+    Args:
+        avg_six: Average pulls per six star.
+        six_total: Number of six stars observed.
+
+    Returns:
+        A short rating, or an empty string when there is nothing to rate.
+    """
+    if six_total <= 0 or avg_six <= 0:
+        return ""
+    if avg_six <= 28:
+        return "欧皇"
+    if avg_six <= 36:
+        return "偏欧"
+    if avg_six <= 45:
+        return "平稳"
+    if avg_six <= 55:
+        return "偏非"
+    return "非酋"
+
+
+def _summarize(
+    records: list[dict[str, Any]],
+    gamedata: Any,
+    char_info: dict[str, Any],
+    recent_limit: int,
+) -> dict[str, Any]:
+    """Summarize one set of records ordered oldest first.
+
+    The six-star sequence and the pity counter are computed over exactly the
+    records passed in, so callers must not mix banner families: pity is tracked
+    per banner family in game, and merging families produced the wrong averages
+    that made special banners look broken.
+
+    Args:
+        records: Records ordered oldest first.
+        gamedata: Optional :class:`~core.gamedata.GameData`.
+        char_info: ``charInfoMap`` for name resolution.
+        recent_limit: How many recent six stars to keep.
+
+    Returns:
+        Statistics mapping for this record set.
+    """
     counts = {SIX_STAR: 0, 5: 0, 4: 0, 3: 0}
     six_stars: list[dict[str, Any]] = []
     pools: dict[str, dict[str, Any]] = {}
     since = 0
+    up_hits = 0
+    off_rate = 0
+    up_known = False
 
-    for record in ordered:
+    for record in records:
         stars = _stars(record)
         counts[stars] = counts.get(stars, 0) + 1
         since += 1
@@ -448,20 +497,25 @@ def analyze(
             pool["five"] += 1
 
         if stars == SIX_STAR:
-            char_id = str(record.get("charId") or "")
-            name = str(record.get("charName") or "")
-            if not name:
-                name = str((char_info.get(char_id) or {}).get("name") or char_id)
+            char_id, name = _six_star_identity(record, char_info)
             up_list = list(gamedata.up_six(pool_id)) if gamedata is not None else []
             if up_list:
+                up_known = True
                 is_up: bool | None = char_id in up_list
             else:
+                # No rate-up data for this pool: report the pull without
+                # claiming either way rather than counting a false off-rate.
                 is_up = None
+            if is_up is True:
+                up_hits += 1
+            elif is_up is False:
+                off_rate += 1
             six_stars.append(
                 {
                     "char_id": char_id,
                     "name": name,
                     "pulls": since,
+                    "pool_id": pool_id,
                     "pool_name": pool_name,
                     "is_up": is_up,
                     "time_text": format_record_time(record.get("gachaTs")),
@@ -470,11 +524,8 @@ def analyze(
             )
             since = 0
 
-    total = len(ordered)
+    total = len(records)
     six_total = counts[SIX_STAR]
-    up_hits = sum(1 for item in six_stars if item["is_up"] is True)
-    off_rate = sum(1 for item in six_stars if item["is_up"] is False)
-
     return {
         "total": total,
         "counts": counts,
@@ -484,9 +535,62 @@ def analyze(
         "pity": since,
         "up_hits": up_hits,
         "off_rate": off_rate,
-        # only show the UP ratio when the pool tables actually knew the UP list
-        "up_known": up_hits + off_rate > 0,
+        "up_known": up_known,
         "six_stars": list(reversed(six_stars))[:recent_limit],
         "six_stars_total": len(six_stars),
         "pools": sorted(pools.values(), key=lambda item: item["count"], reverse=True),
     }
+
+
+def analyze(
+    records: list[dict[str, Any]],
+    gamedata: Any = None,
+    char_info: dict[str, Any] | None = None,
+    recent_limit: int = 12,
+) -> dict[str, Any]:
+    """Compute headhunting statistics, overall and per banner family.
+
+    Records are split by banner family first and summarized independently, then
+    summarized once more as a whole. The per-family figures are the meaningful
+    ones for pity and average pulls; the overall figures are kept for the card
+    header.
+
+    Args:
+        records: Records as returned by :meth:`GachaClient.fetch_records`.
+        gamedata: Optional :class:`~core.gamedata.GameData` for pool and UP names.
+        char_info: Optional ``charInfoMap`` used to resolve operator names.
+        recent_limit: How many recent six stars to include per section.
+
+    Returns:
+        Analysis context for ``gacha.html``.
+    """
+    char_info = char_info or {}
+    ordered = sorted(
+        records or [],
+        key=lambda item: (int(item.get("gachaTs") or 0), int(item.get("pos") or 0)),
+    )
+
+    families: dict[str, dict[str, Any]] = {}
+    for record in ordered:
+        key, label = banner_group(str(record.get("poolId") or ""))
+        bucket = families.setdefault(key, {"label": label, "records": []})
+        bucket["records"].append(record)
+
+    context = _summarize(ordered, gamedata, char_info, recent_limit)
+    context["luck"] = _luck_label(context["avg_six"], context["six_total"])
+
+    banners = []
+    for key, bucket in families.items():
+        summary = _summarize(bucket["records"], gamedata, char_info, recent_limit)
+        summary["key"] = key
+        summary["label"] = bucket["label"]
+        summary["luck"] = _luck_label(summary["avg_six"], summary["six_total"])
+        summary["newest"] = max(
+            (int(item.get("gachaTs") or 0) for item in bucket["records"]), default=0
+        )
+        banners.append(summary)
+    banners.sort(key=lambda item: item["newest"], reverse=True)
+
+    context["banners"] = banners
+    context["banner_count"] = len(banners)
+    return context
