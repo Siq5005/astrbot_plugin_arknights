@@ -51,7 +51,7 @@ from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
-PLUGIN_VERSION = "0.3.0"
+PLUGIN_VERSION = "0.3.1"
 
 # Seconds the QR code stays valid, and how often it is polled.
 QR_TIMEOUT = 120
@@ -490,6 +490,12 @@ class ArknightsPlugin(Star):
                     Image.fromBytes(png),
                 ]
             )
+        else:
+            # The QR goes out through the raw platform client, which bypasses
+            # AstrMessageEvent.send() and therefore never sets _has_send_oper.
+            # Without this the pipeline sees "woken by prefix, nothing sent" and
+            # runs the LLM as well, so the group gets a QR plus a second reply.
+            event.stop_event()
 
         task = asyncio.create_task(
             self._poll_qr_login(

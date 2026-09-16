@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.3.0-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.3.1-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -344,6 +344,10 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.3.1 (2026-09-16)
+
+- 🐛 **修复 `ark绑定` 双回复**：二维码为拿到 `message_id`（用于过期撤回）经平台客户端直发，绕过了 AstrBot 的发送登记，框架认为本条消息什么都没发出，主管道 LLM 于是又答了一句。现在发送成功后显式 `stop_event()`；扫码结果的「绑定成功 / 已过期」通知走 `context.send_message`，与事件解耦，不受影响
 
 ### 0.3.0 (2026-09-16)
 
