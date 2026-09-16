@@ -37,6 +37,7 @@ from .core.daily import (
     build_task_context,
 )
 from .core.gacha import GachaClient, GachaError, analyze, format_record_time
+from .core.gacha_store import GachaStore
 from .core.gamedata import GameData
 from .core.hypergryph import HypergryphClient, HypergryphError
 from .core.operators import (
@@ -64,51 +65,53 @@ QR_PROMPT = """请使用「森空岛」APP 扫描二维码完成登录
 
 二维码 2 分钟内有效；登录成功、超时或被拒后会自动撤回。"""
 
-NO_BINDING_TEXT = "你还没有绑定账号。请在私聊发送 `方舟绑定` 扫码登录。"
+NO_BINDING_TEXT = "你还没有绑定账号。请在私聊发送 `ark绑定` 扫码登录。"
 
 # Substrings that indicate the stored passport token is no longer usable.
 AUTH_ERROR_MARKERS = ("未登录", "失效", "过期", "unauthorized", "401", "403")
 
-# Every command is namespaced with 方舟 so that it can never collide with the
+# Every command is namespaced with ark so that it can never collide with the
 # Endfield plugin (which registers bare 理智 / 便签 / 签到 / 扫码绑定 ... and a
 # permissive "xx面板" regex). Keep this prefix on every command.
-CMD_PREFIX = "方舟"
+CMD_PREFIX = "ark"
 
 HELP_TEXT = """罗德岛终端 · 明日方舟助手
 
-所有指令以 `方舟` 开头，避免与终末地插件（zmd）的同名指令冲突。
+所有指令以 `ark` 开头，避免与终末地插件（zmd）的同名指令冲突。
 
 【账号绑定】（请私聊使用）
-方舟绑定              使用森空岛 APP 扫码登录（唯一登录方式）
-方舟绑定列表          查看所有绑定账号
-方舟切换绑定 <序号>    切换主账号
-方舟删除绑定 <序号>    解绑指定账号
+ark绑定              使用森空岛 APP 扫码登录（唯一登录方式）
+ark绑定列表          查看所有绑定账号
+ark切换绑定 <序号>    切换主账号
+ark删除绑定 <序号>    解绑指定账号
 
 【数据查询】
-方舟便签              账号总览
-方舟理智              理智与回满时间
-方舟干员列表          已持有干员图鉴
-方舟干员 <干员名>      单个干员详情
+ark便签              账号总览
+ark理智              理智与回满时间
+ark干员列表          已持有干员图鉴
+ark干员 <干员名>      单个干员详情
 
 【日常玩法】
-方舟基建              基建设施与干员心情
-方舟剿灭              剿灭作战与本周合成玉
-方舟肉鸽              集成战略收藏品与投资
-方舟任务              每日/每周任务与周常奖励
-方舟公招              公开招募栏位状态
+ark基建              基建设施与干员心情
+ark剿灭              剿灭作战与本周合成玉
+ark肉鸽              集成战略收藏品与投资
+ark任务              每日/每周任务与周常奖励
+ark公招              公开招募栏位状态
 
 【官方公告】
-方舟公告              公告列表（`方舟公告 <编号>` 看正文）
-方舟订阅公告 / 方舟取消订阅公告  新公告私聊推送
+ark公告              公告列表（`ark公告 <编号>` 看正文）
+ark订阅公告 / ark取消订阅公告  新公告私聊推送
 
 【抽卡】
-方舟抽卡分析          六星统计、保底与 UP 判定
-方舟抽卡记录          最近的抽卡记录
+ark抽卡分析          六星统计、保底与 UP 判定
+ark抽卡记录          最近的抽卡记录
+ark抽卡分析 同步     强制重新同步官网记录
+ark抽卡重置          清空本机保存的抽卡记录
 
 【签到与提醒】
-方舟签到              手动执行森空岛签到
-方舟订阅理智 / 方舟取消订阅理智  理智回满推送
-方舟订阅签到 / 方舟取消订阅签到  群内签到结果通知
+ark签到              手动执行森空岛签到
+ark订阅理智 / ark取消订阅理智  理智回满推送
+ark订阅签到 / ark取消订阅签到  群内签到结果通知
 
 账号凭证仅保存在本机，且不会在任何回复中回显。
 """
@@ -118,51 +121,53 @@ HELP_SECTIONS = [
     {
         "title": "账号绑定（请私聊使用）",
         "items": [
-            {"cmd": "方舟绑定", "desc": "森空岛 APP 扫码登录（唯一登录方式）"},
-            {"cmd": "方舟绑定列表", "desc": "查看所有绑定账号"},
-            {"cmd": "方舟切换绑定 <序号>", "desc": "切换主账号"},
-            {"cmd": "方舟删除绑定 <序号>", "desc": "解绑指定账号"},
+            {"cmd": "ark绑定", "desc": "森空岛 APP 扫码登录（唯一登录方式）"},
+            {"cmd": "ark绑定列表", "desc": "查看所有绑定账号"},
+            {"cmd": "ark切换绑定 <序号>", "desc": "切换主账号"},
+            {"cmd": "ark删除绑定 <序号>", "desc": "解绑指定账号"},
         ],
     },
     {
         "title": "数据查询",
         "items": [
-            {"cmd": "方舟便签", "desc": "账号总览"},
-            {"cmd": "方舟理智", "desc": "理智与回满时间"},
-            {"cmd": "方舟干员列表", "desc": "已持有干员图鉴"},
-            {"cmd": "方舟干员 <干员名>", "desc": "单个干员详情"},
+            {"cmd": "ark便签", "desc": "账号总览"},
+            {"cmd": "ark理智", "desc": "理智与回满时间"},
+            {"cmd": "ark干员列表", "desc": "已持有干员图鉴"},
+            {"cmd": "ark干员 <干员名>", "desc": "单个干员详情"},
         ],
     },
     {
         "title": "日常玩法",
         "items": [
-            {"cmd": "方舟基建", "desc": "基建设施与干员心情"},
-            {"cmd": "方舟剿灭", "desc": "剿灭作战与本周合成玉"},
-            {"cmd": "方舟肉鸽", "desc": "集成战略收藏品与投资"},
-            {"cmd": "方舟任务", "desc": "每日/每周任务与周常奖励"},
-            {"cmd": "方舟公招", "desc": "公开招募栏位状态"},
+            {"cmd": "ark基建", "desc": "基建设施与干员心情"},
+            {"cmd": "ark剿灭", "desc": "剿灭作战与本周合成玉"},
+            {"cmd": "ark肉鸽", "desc": "集成战略收藏品与投资"},
+            {"cmd": "ark任务", "desc": "每日/每周任务与周常奖励"},
+            {"cmd": "ark公招", "desc": "公开招募栏位状态"},
         ],
     },
     {
         "title": "官方公告",
         "items": [
-            {"cmd": "方舟公告", "desc": "公告列表，可带编号看正文"},
-            {"cmd": "方舟订阅公告 / 方舟取消订阅公告", "desc": "新公告私聊推送"},
+            {"cmd": "ark公告", "desc": "公告列表，可带编号看正文"},
+            {"cmd": "ark订阅公告 / ark取消订阅公告", "desc": "新公告私聊推送"},
         ],
     },
     {
         "title": "抽卡",
         "items": [
-            {"cmd": "方舟抽卡分析", "desc": "六星统计、保底与 UP 判定"},
-            {"cmd": "方舟抽卡记录", "desc": "最近的抽卡记录"},
+            {"cmd": "ark抽卡分析", "desc": "六星统计、保底与 UP 判定"},
+            {"cmd": "ark抽卡记录", "desc": "最近的抽卡记录"},
+            {"cmd": "ark抽卡分析 同步", "desc": "强制重新同步官网记录"},
+            {"cmd": "ark抽卡重置", "desc": "清空本机保存的抽卡记录"},
         ],
     },
     {
         "title": "签到与提醒",
         "items": [
-            {"cmd": "方舟签到", "desc": "手动执行森空岛签到"},
-            {"cmd": "方舟订阅理智 / 方舟取消订阅理智", "desc": "理智回满推送"},
-            {"cmd": "方舟订阅签到 / 方舟取消订阅签到", "desc": "群内签到结果通知"},
+            {"cmd": "ark签到", "desc": "手动执行森空岛签到"},
+            {"cmd": "ark订阅理智 / ark取消订阅理智", "desc": "理智回满推送"},
+            {"cmd": "ark订阅签到 / ark取消订阅签到", "desc": "群内签到结果通知"},
         ],
     },
 ]
@@ -194,6 +199,7 @@ class ArknightsPlugin(Star):
             Path(get_astrbot_plugin_data_path()) / PLUGIN_NAME / "gamedata"
         )
         self._gacha = GachaClient()
+        self._gacha_store = GachaStore()
         self._announce = AnnounceClient()
         # Announcement ids already pushed, so a restart does not resend them.
         self._announce_seen: set[str] = set()
@@ -441,7 +447,7 @@ class ArknightsPlugin(Star):
 
     # ── account commands ──────────────────────────────────────────────────
 
-    @filter.command("方舟帮助")
+    @filter.command("ark帮助")
     async def show_help(self, event: AstrMessageEvent):
         """Show the plugin command overview as a card."""
         image = await self._render("help.html", {"sections": HELP_SECTIONS})
@@ -450,7 +456,7 @@ class ArknightsPlugin(Star):
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
 
-    @filter.command("方舟绑定")
+    @filter.command("ark绑定")
     async def bind_by_qr(self, event: AstrMessageEvent):
         """Bind an account by scanning a QR code with the Skland app."""
         if not event.is_private_chat():
@@ -580,11 +586,11 @@ class ArknightsPlugin(Star):
                 result = await self._complete_binding(user_key, token, umo)
                 await self._notify(umo, result or "扫码绑定成功。")
                 return
-            await self._notify(umo, "二维码已过期，请重新发送 `方舟绑定`。")
+            await self._notify(umo, "二维码已过期，请重新发送 `ark绑定`。")
         finally:
             await self._recall(event, message_id)
 
-    @filter.command("方舟绑定列表")
+    @filter.command("ark绑定列表")
     async def list_bindings(self, event: AstrMessageEvent):
         """List every account bound by the caller."""
         user = await self.store.get_user(event.get_sender_id())
@@ -600,10 +606,10 @@ class ArknightsPlugin(Star):
                 f"{index}. {binding.get('nick_name') or '未知'} · "
                 f"{binding.get('channel_name') or '未知服'} · uid ...{uid[-4:]}{mark}"
             )
-        lines.append("使用 `方舟切换绑定 <序号>` 或 `方舟删除绑定 <序号>` 管理。")
+        lines.append("使用 `ark切换绑定 <序号>` 或 `ark删除绑定 <序号>` 管理。")
         yield event.plain_result("\n".join(lines))
 
-    @filter.command("方舟切换绑定")
+    @filter.command("ark切换绑定")
     async def switch_binding(self, event: AstrMessageEvent):
         """Switch the primary role used by data queries."""
         args = self._args(event)
@@ -614,14 +620,14 @@ class ArknightsPlugin(Star):
         index = self._parse_index(args[0] if args else "")
         if index is None or not 0 <= index < len(user["bindings"]):
             yield event.plain_result(
-                f"序号无效。请使用 `方舟绑定列表` 查看序号（1-{len(user['bindings'])}）。"
+                f"序号无效。请使用 `ark绑定列表` 查看序号（1-{len(user['bindings'])}）。"
             )
             return
         target = user["bindings"][index]
         await self.store.set_primary(event.get_sender_id(), str(target.get("uid")))
         yield event.plain_result(f"已切换到 {target.get('nick_name') or '未知角色'}。")
 
-    @filter.command("方舟删除绑定")
+    @filter.command("ark删除绑定")
     async def delete_binding(self, event: AstrMessageEvent):
         """Remove one bound role."""
         args = self._args(event)
@@ -632,7 +638,7 @@ class ArknightsPlugin(Star):
         index = self._parse_index(args[0] if args else "")
         if index is None or not 0 <= index < len(user["bindings"]):
             yield event.plain_result(
-                f"序号无效。请使用 `方舟绑定列表` 查看序号（1-{len(user['bindings'])}）。"
+                f"序号无效。请使用 `ark绑定列表` 查看序号（1-{len(user['bindings'])}）。"
             )
             return
         target = user["bindings"][index]
@@ -710,10 +716,10 @@ class ArknightsPlugin(Star):
         text = str(exc)
         if any(marker in text for marker in AUTH_ERROR_MARKERS):
             await self.store.remove_user(event.get_sender_id())
-            return "账号凭证已失效，已清除你的绑定。请重新发送 `方舟绑定`。"
+            return "账号凭证已失效，已清除你的绑定。请重新发送 `ark绑定`。"
         return f"查询失败：{text}"
 
-    @filter.command("方舟便签")
+    @filter.command("ark便签")
     async def show_note(self, event: AstrMessageEvent):
         """Show the account overview card."""
         resolved = await self._resolve_binding(event)
@@ -758,7 +764,7 @@ class ArknightsPlugin(Star):
             ]
         )
 
-    @filter.command("方舟理智")
+    @filter.command("ark理智")
     async def show_sanity(self, event: AstrMessageEvent):
         """Show the sanity card."""
         resolved = await self._resolve_binding(event)
@@ -818,7 +824,7 @@ class ArknightsPlugin(Star):
             return f"{name}：签到成功（{awards}）"
         return f"{name}：{result.error}"
 
-    @filter.command("方舟签到")
+    @filter.command("ark签到")
     async def do_sign(self, event: AstrMessageEvent):
         """Run the Skland attendance sign-in for the current role."""
         resolved = await self._resolve_binding(event)
@@ -843,7 +849,7 @@ class ArknightsPlugin(Star):
         else:
             yield event.plain_result(f"签到失败：{result.error}")
 
-    @filter.command("方舟订阅理智")
+    @filter.command("ark订阅理智")
     async def subscribe_sanity(self, event: AstrMessageEvent):
         """Enable sanity-full notifications for the caller."""
         if not event.is_private_chat():
@@ -858,16 +864,16 @@ class ArknightsPlugin(Star):
         minutes = max(10, int(self.config.get("sanity_poll_interval", 20) or 20))
         yield event.plain_result(
             f"已开启理智回满提醒，每 {minutes} 分钟检查一次。\n"
-            "发送 `方舟取消订阅理智` 可关闭。"
+            "发送 `ark取消订阅理智` 可关闭。"
         )
 
-    @filter.command("方舟取消订阅理智")
+    @filter.command("ark取消订阅理智")
     async def unsubscribe_sanity(self, event: AstrMessageEvent):
         """Disable sanity-full notifications for the caller."""
         await self.store.set_sanity_sub(event.get_sender_id(), "", False)
         yield event.plain_result("已关闭理智回满提醒。")
 
-    @filter.command("方舟订阅签到")
+    @filter.command("ark订阅签到")
     async def subscribe_sign(self, event: AstrMessageEvent):
         """Subscribe the current group to automatic sign-in results."""
         group_id = event.get_group_id()
@@ -877,7 +883,7 @@ class ArknightsPlugin(Star):
         await self.store.set_sign_group(group_id, event.unified_msg_origin, True)
         yield event.plain_result("已开启本群的自动签到结果通知。")
 
-    @filter.command("方舟取消订阅签到")
+    @filter.command("ark取消订阅签到")
     async def unsubscribe_sign(self, event: AstrMessageEvent):
         """Unsubscribe the current group from automatic sign-in results."""
         group_id = event.get_group_id()
@@ -926,7 +932,7 @@ class ArknightsPlugin(Star):
     async def _auto_sign_job(self) -> None:
         """Sign in every bound account and deliver a summary.
 
-        Results go to the groups subscribed with ``方舟订阅签到``; when no group is
+        Results go to the groups subscribed with ``ark订阅签到``; when no group is
         subscribed they are sent privately to each account owner instead.
         """
         users = await self.store.all_users()
@@ -1003,7 +1009,7 @@ class ArknightsPlugin(Star):
 
     # ── operator queries ──────────────────────────────────────────────────
 
-    @filter.command("方舟干员列表")
+    @filter.command("ark干员列表")
     async def show_roster(self, event: AstrMessageEvent):
         """Show the owned-operator roster card."""
         resolved = await self._resolve_binding(event)
@@ -1031,15 +1037,15 @@ class ArknightsPlugin(Star):
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
 
-    @filter.command("方舟干员", alias={"方舟面板"})
+    @filter.command("ark干员", alias={"ark面板"})
     async def show_operator(self, event: AstrMessageEvent):
         """Show the detail card for one owned operator."""
         args = self._args(event)
         if not args:
             yield event.plain_result(
-                "用法：方舟干员 <干员名>\n"
-                "例如：方舟干员 阿米娅\n"
-                "发送 `方舟干员列表` 可查看已持有的干员。"
+                "用法：ark干员 <干员名>\n"
+                "例如：ark干员 阿米娅\n"
+                "发送 `ark干员列表` 可查看已持有的干员。"
             )
             return
         name = " ".join(args).strip()
@@ -1058,7 +1064,7 @@ class ArknightsPlugin(Star):
         )
         if operator is None:
             yield event.plain_result(
-                f"未找到干员「{name}」。发送 `方舟干员列表` 可查看已持有的干员。"
+                f"未找到干员「{name}」。发送 `ark干员列表` 可查看已持有的干员。"
             )
             return
         context = build_operator_context(operator, data.get("equipmentInfoMap") or {})
@@ -1139,7 +1145,7 @@ class ArknightsPlugin(Star):
             return None, await self._report_query_error(event, exc)
         return data, None
 
-    @filter.command("方舟基建")
+    @filter.command("ark基建")
     async def show_building(self, event: AstrMessageEvent):
         """Show the base (基建) card."""
         data, error = await self._daily_data(event)
@@ -1174,7 +1180,7 @@ class ArknightsPlugin(Star):
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
 
-    @filter.command("方舟剿灭")
+    @filter.command("ark剿灭")
     async def show_campaign(self, event: AstrMessageEvent):
         """Show the annihilation (剿灭作战) card."""
         data, error = await self._daily_data(event)
@@ -1202,7 +1208,7 @@ class ArknightsPlugin(Star):
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
 
-    @filter.command("方舟肉鸽")
+    @filter.command("ark肉鸽")
     async def show_rogue(self, event: AstrMessageEvent):
         """Show the integrated-strategies (集成战略) card."""
         data, error = await self._daily_data(event)
@@ -1227,7 +1233,7 @@ class ArknightsPlugin(Star):
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
 
-    @filter.command("方舟任务")
+    @filter.command("ark任务")
     async def show_task(self, event: AstrMessageEvent):
         """Show the routine (任务进度) card."""
         data, error = await self._daily_data(event)
@@ -1266,7 +1272,7 @@ class ArknightsPlugin(Star):
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
 
-    @filter.command("方舟公招")
+    @filter.command("ark公招")
     async def show_recruit(self, event: AstrMessageEvent):
         """Show the recruitment (公开招募) slot card."""
         data, error = await self._daily_data(event)
@@ -1293,40 +1299,75 @@ class ArknightsPlugin(Star):
 
     # ── headhunting ───────────────────────────────────────────────────────
 
-    async def _gacha_records(self, event: AstrMessageEvent):
-        """Fetch headhunting records for the caller's primary role.
+    async def _gacha_records(self, event: AstrMessageEvent, force: bool = False):
+        """Load headhunting records for the caller's primary role.
+
+        Records are served from local storage while the sync is fresh, so
+        repeated queries cost nothing. A sync merges the fetched window into
+        the stored history rather than replacing it, which lets the history
+        grow past what the official endpoint still returns.
 
         Args:
             event: Incoming message event.
+            force: Skip the freshness check and sync now.
 
         Returns:
-            Tuple of records, player data and an error message. Records are
-            empty when an error message is present.
+            Tuple of records, player data, sync state and an error message.
+            Records are empty when an error message is present.
         """
         resolved = await self._resolve_binding(event)
         if not resolved:
-            return [], {}, NO_BINDING_TEXT
+            return [], {}, {}, NO_BINDING_TEXT
         user, binding = resolved
         uid = str(binding.get("uid") or "")
         token = str(user.get("token") or "")
-        try:
-            await self._gamedata.ensure()
-            records = await self._gacha.fetch_records(token, uid)
-        except GachaError as exc:
-            return [], {}, f"抽卡记录获取失败：{exc}"
-        except Exception as exc:  # noqa: BLE001 - surface any chain failure
-            logger.error("抽卡记录获取异常: %s", exc)
-            return [], {}, f"抽卡记录获取失败：{exc}"
+
+        cached = await self._gacha_store.load(uid)
+        ttl = max(0, int(self.config.get("gacha_cache_ttl", 21600) or 0))
+        fresh = cached["records"] and (time.time() - cached["synced_at"]) < ttl
+        if fresh and not force:
+            state = {
+                "synced_at": cached["synced_at"],
+                "stored_total": len(cached["records"]),
+                "just_synced": False,
+            }
+        else:
+            try:
+                await self._gamedata.ensure()
+                fetched = await self._gacha.fetch_records(token, uid)
+            except GachaError as exc:
+                if cached["records"]:
+                    # a failed refresh must not hide the history already held
+                    logger.warning("抽卡同步失败，改用本地记录: %s", exc)
+                    fetched = []
+                else:
+                    return [], {}, {}, f"抽卡记录获取失败：{exc}"
+            except Exception as exc:  # noqa: BLE001 - surface any chain failure
+                logger.error("抽卡记录获取异常: %s", exc)
+                if cached["records"]:
+                    fetched = []
+                else:
+                    return [], {}, {}, f"抽卡记录获取失败：{exc}"
+            merged = await self._gacha_store.merge(uid, fetched)
+            state = {
+                "synced_at": merged["synced_at"],
+                "stored_total": len(merged["records"]),
+                "just_synced": True,
+            }
+            cached = merged
+
         try:
             player = await self._player_data(user, binding)
         except SklandError:
             player = {}
-        return records, player, None
+        return cached["records"], player, state, None
 
-    @filter.command("方舟抽卡分析")
+    @filter.command("ark抽卡分析")
     async def show_gacha(self, event: AstrMessageEvent):
         """Show the headhunting analysis card."""
-        records, player, error = await self._gacha_records(event)
+        args = self._args(event)
+        force = any(str(a) in {"同步", "刷新", "sync"} for a in args)
+        records, player, state, error = await self._gacha_records(event, force=force)
         if error:
             yield event.plain_result(error)
             return
@@ -1337,6 +1378,9 @@ class ArknightsPlugin(Star):
             )
             return
         context = analyze(records, self._gamedata, player.get("charInfoMap") or {})
+        context["synced_text"] = format_record_time(state.get("synced_at"))
+        context["stored_total"] = state.get("stored_total", len(records))
+        context["just_synced"] = state.get("just_synced", False)
         image = await self._render("gacha.html", {"gacha": context})
         if image is None:
             yield event.plain_result(self._gacha_text(context))
@@ -1370,10 +1414,24 @@ class ArknightsPlugin(Star):
             lines.append(f"{item['name']}（{item['pulls']} 抽，{item['pool_name']}）")
         return "\n".join(lines)
 
-    @filter.command("方舟抽卡记录")
+    @filter.command("ark抽卡重置")
+    async def reset_gacha(self, event: AstrMessageEvent):
+        """Drop the locally stored headhunting history of the primary role."""
+        resolved = await self._resolve_binding(event)
+        if not resolved:
+            yield event.plain_result(NO_BINDING_TEXT)
+            return
+        _user, binding = resolved
+        uid = str(binding.get("uid") or "")
+        await self._gacha_store.clear(uid)
+        yield event.plain_result(
+            "已清空该角色在本机保存的抽卡记录。\n下次 `ark抽卡分析` 会重新从官网同步。"
+        )
+
+    @filter.command("ark抽卡记录")
     async def show_gacha_records(self, event: AstrMessageEvent):
         """List the most recent headhunting records as text."""
-        records, player, error = await self._gacha_records(event)
+        records, player, state, error = await self._gacha_records(event)
         if error:
             yield event.plain_result(error)
             return
@@ -1381,7 +1439,11 @@ class ArknightsPlugin(Star):
             yield event.plain_result("没有获取到抽卡记录。")
             return
         char_info = player.get("charInfoMap") or {}
-        lines = [f"最近 {min(len(records), 15)} 条抽卡记录（共 {len(records)} 条）："]
+        lines = [
+            f"最近 {min(len(records), 15)} 条抽卡记录（本地共 {len(records)} 条）：",
+            f"同步时间 {format_record_time(state.get('synced_at'))}",
+            "",
+        ]
         for record in records[:15]:
             stars = max(3, min(6, int(record.get("rarity") or 2) + 1))
             char_id = str(record.get("charId") or "")
@@ -1408,7 +1470,7 @@ class ArknightsPlugin(Star):
         """
         return await self._announce.fetch()
 
-    @filter.command("方舟公告")
+    @filter.command("ark公告")
     async def show_announcements(self, event: AstrMessageEvent):
         """List official announcements, or show one by id."""
         args = self._args(event)
@@ -1475,7 +1537,7 @@ class ArknightsPlugin(Star):
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
 
-    @filter.command("方舟订阅公告")
+    @filter.command("ark订阅公告")
     async def subscribe_announce(self, event: AstrMessageEvent):
         """Enable new-announcement notifications for the caller."""
         if not event.is_private_chat():
@@ -1487,10 +1549,10 @@ class ArknightsPlugin(Star):
         minutes = max(15, int(self.config.get("announce_poll_interval", 30) or 30))
         yield event.plain_result(
             f"已订阅官方公告，每 {minutes} 分钟检查一次，有新公告会私聊推送。\n"
-            "发送 `方舟取消订阅公告` 可关闭。"
+            "发送 `ark取消订阅公告` 可关闭。"
         )
 
-    @filter.command("方舟取消订阅公告")
+    @filter.command("ark取消订阅公告")
     async def unsubscribe_announce(self, event: AstrMessageEvent):
         """Disable new-announcement notifications for the caller."""
         await self.store.set_announce_sub(event.get_sender_id(), "", False)
@@ -1530,7 +1592,7 @@ class ArknightsPlugin(Star):
         ]
         text = "官方新公告\n\n" + "\n\n".join(lines)
         if len(fresh) > 5:
-            text += f"\n\n……另有 {len(fresh) - 5} 条，发送 `方舟公告` 查看全部"
+            text += f"\n\n……另有 {len(fresh) - 5} 条，发送 `ark公告` 查看全部"
         for sub in subs:
             umo = str(sub.get("umo") or "")
             if umo:
@@ -1585,5 +1647,5 @@ class ArknightsPlugin(Star):
         yield event.plain_result(
             f"「{cmd}」要带唤醒前缀喵 (・_・?)\n"
             f"本群的指令前面要加 ~ ，所以是：~{cmd}\n"
-            f"想不起来有哪些就发 ~方舟帮助 看菜单"
+            f"想不起来有哪些就发 ~ark帮助 看菜单"
         )

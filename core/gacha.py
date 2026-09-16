@@ -146,7 +146,7 @@ class GachaClient:
         except ValueError as exc:
             raise GachaError("授权响应格式异常") from exc
         if not isinstance(data, dict) or data.get("status") != 0:
-            raise GachaError("账号凭证已失效，请重新执行 `方舟绑定`")
+            raise GachaError("账号凭证已失效，请重新执行 `ark绑定`")
         return str((data.get("data") or {}).get("token") or "")
 
     async def role_token(self, grant: str, uid: str) -> str:

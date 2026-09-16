@@ -240,7 +240,9 @@
         <div class="overview-cell">
           <div class="overview-key">卡池数</div>
           <div class="overview-val">{{ gacha.banner_count }}</div>
-          <div class="overview-meta">按卡池族统计</div>
+          <div class="overview-meta">
+            {% if gacha.just_synced %}本次已同步官网{% else %}使用本地记录{% endif %}
+          </div>
         </div>
       </div>
 
@@ -321,7 +323,10 @@
       {% endfor %}
 
       <div class="card-footer">
-        <span>© HYPERGRYPH · 保底与平均按卡池族分别统计；UP 判定依据卡池 UP 名单，缺失时不判定</span>
+        <span>
+          © HYPERGRYPH · 本地共 {{ gacha.stored_total }} 条 · 同步于
+          {{ gacha.synced_text }}
+        </span>
         <span><span class="barcode"></span><span class="serial">RI-HEADHUNT-001</span></span>
       </div>
     </div>

@@ -90,31 +90,32 @@ PLAYER = {
 PLUGIN_NAME = "astrbot_plugin_arknights"
 
 EXPECTED_COMMANDS = {
-    "方舟帮助",
-    "方舟绑定",
-    "方舟绑定列表",
-    "方舟切换绑定",
-    "方舟删除绑定",
-    "方舟便签",
-    "方舟理智",
-    "方舟签到",
-    "方舟订阅理智",
-    "方舟取消订阅理智",
-    "方舟订阅签到",
-    "方舟取消订阅签到",
-    "方舟干员列表",
-    "方舟干员",
-    "方舟面板",
-    "方舟基建",
-    "方舟剿灭",
-    "方舟肉鸽",
-    "方舟任务",
-    "方舟公招",
-    "方舟抽卡分析",
-    "方舟抽卡记录",
-    "方舟公告",
-    "方舟订阅公告",
-    "方舟取消订阅公告",
+    "ark帮助",
+    "ark绑定",
+    "ark绑定列表",
+    "ark切换绑定",
+    "ark删除绑定",
+    "ark便签",
+    "ark理智",
+    "ark签到",
+    "ark订阅理智",
+    "ark取消订阅理智",
+    "ark订阅签到",
+    "ark取消订阅签到",
+    "ark干员列表",
+    "ark干员",
+    "ark面板",
+    "ark基建",
+    "ark剿灭",
+    "ark肉鸽",
+    "ark任务",
+    "ark公招",
+    "ark抽卡分析",
+    "ark抽卡记录",
+    "ark抽卡重置",
+    "ark公告",
+    "ark订阅公告",
+    "ark取消订阅公告",
 }
 
 # Commands registered by astrbot_plugin_endfield that must never be claimed by
@@ -294,7 +295,7 @@ async def main() -> int:
         else f"{len(EXPECTED_COMMANDS)}/{len(EXPECTED_COMMANDS)}",
     )
 
-    # The whole point of the 方舟 prefix: a message must never be claimed by both
+    # The whole point of the ark prefix: a message must never be claimed by both
     # this plugin and astrbot_plugin_endfield.
     overlap = registered & ENDFIELD_COMMANDS
     check(
@@ -384,18 +385,18 @@ async def main() -> int:
     hints = await drive(
         plugin_module.ArknightsPlugin.missing_prefix_hint(
             plugin_module.ArknightsPlugin,
-            StubEvent("方舟理智"),
+            StubEvent("ark理智"),
         )
     )
     check(
         "漏写 ~ 时给出提示并拦下消息",
-        hints and hints[0][0] == "plain" and "~方舟理智" in hints[0][1],
+        hints and hints[0][0] == "plain" and "~ark理智" in hints[0][1],
         hints[0][1].replace("\n", " | ") if hints else "no result",
     )
     for label, kwargs in (
-        ("带 ~ 前缀时让路", {"text": "~方舟理智"}),
-        ("被 @ 唤醒时让路", {"text": "方舟理智", "at_or_wake": True}),
-        ("消息含 @ 他人时让路", {"text": "方舟理智", "mentions": True}),
+        ("带 ~ 前缀时让路", {"text": "~ark理智"}),
+        ("被 @ 唤醒时让路", {"text": "ark理智", "at_or_wake": True}),
+        ("消息含 @ 他人时让路", {"text": "ark理智", "mentions": True}),
     ):
         quiet = await drive(
             plugin_module.ArknightsPlugin.missing_prefix_hint(
@@ -456,21 +457,21 @@ async def main() -> int:
     plugin._announce.fetch = fake_announce
     plugin._announce.fetch_detail = fake_detail
 
-    results = await drive(plugin.show_announcements(StubEvent("/方舟公告")))
+    results = await drive(plugin.show_announcements(StubEvent("/ark公告")))
     check(
-        "方舟公告 renders a card",
+        "ark公告 renders a card",
         results and results[0][0] == "chain" and Path(results[0][1][0].path).is_file(),
     )
 
-    results = await drive(plugin.show_announcements(StubEvent("/方舟公告 7367")))
+    results = await drive(plugin.show_announcements(StubEvent("/ark公告 7367")))
     check(
-        "方舟公告 <编号> renders the body card",
+        "ark公告 <编号> renders the body card",
         results and results[0][0] == "chain" and Path(results[0][1][0].path).is_file(),
     )
 
-    results = await drive(plugin.show_announcements(StubEvent("/方舟公告 9999")))
+    results = await drive(plugin.show_announcements(StubEvent("/ark公告 9999")))
     check(
-        "方舟公告 with an unknown id says so",
+        "ark公告 with an unknown id says so",
         results and "没有找到" in results[0][1],
     )
 
@@ -481,28 +482,28 @@ async def main() -> int:
         raise plugin_module.AnnounceError("网络不可用")
 
     plugin._announce.fetch = failing_announce
-    results = await drive(plugin.show_announcements(StubEvent("/方舟公告")))
+    results = await drive(plugin.show_announcements(StubEvent("/ark公告")))
     check(
-        "方舟公告 reports a feed failure",
+        "ark公告 reports a feed failure",
         results and "公告获取失败" in results[0][1],
     )
     plugin._announce.fetch = fake_announce
 
-    results = await drive(plugin.subscribe_announce(StubEvent("/方舟订阅公告")))
+    results = await drive(plugin.subscribe_announce(StubEvent("/ark订阅公告")))
     check(
-        "方舟订阅公告 confirms in private",
+        "ark订阅公告 confirms in private",
         results and "已订阅" in results[0][1],
     )
     results = await drive(
-        plugin.subscribe_announce(StubEvent("/方舟订阅公告", private=False))
+        plugin.subscribe_announce(StubEvent("/ark订阅公告", private=False))
     )
     check(
-        "方舟订阅公告 refuses in a group",
+        "ark订阅公告 refuses in a group",
         results and "私聊" in results[0][1],
     )
     subs = await plugin.store.list_announce_subs()
     check("公告订阅已落库", len(subs) == 1, f"{subs}")
-    await plugin.unsubscribe_announce(StubEvent("/方舟取消订阅公告")).__anext__()
+    await plugin.unsubscribe_announce(StubEvent("/ark取消订阅公告")).__anext__()
     check("公告订阅可取消", not await plugin.store.list_announce_subs())
 
     async def fake_authorization(token: str) -> str:
@@ -526,10 +527,10 @@ async def main() -> int:
 
     # Unbound user
     await plugin.store.remove_user("10001")
-    results = await drive(plugin.show_note(StubEvent("/方舟便签")))
+    results = await drive(plugin.show_note(StubEvent("/ark便签")))
     check(
-        "方舟便签 without binding prompts to bind",
-        results and results[0][0] == "plain" and "方舟绑定" in results[0][1],
+        "ark便签 without binding prompts to bind",
+        results and results[0][0] == "plain" and "ark绑定" in results[0][1],
         results[0][1] if results else "no result",
     )
 
@@ -550,9 +551,9 @@ async def main() -> int:
     )
 
     for command, handler, label in (
-        ("/方舟便签", "show_note", "方舟便签"),
-        ("/方舟理智", "show_sanity", "方舟理智"),
-        ("/方舟干员列表", "show_roster", "方舟干员列表"),
+        ("/ark便签", "show_note", "ark便签"),
+        ("/ark理智", "show_sanity", "ark理智"),
+        ("/ark干员列表", "show_roster", "ark干员列表"),
     ):
         results = await drive(getattr(plugin, handler)(StubEvent(command)))
         image_ok = (
@@ -565,42 +566,42 @@ async def main() -> int:
 
     # Operator detail by argument; the form deliberately does not end in 面板 so
     # that the Endfield plugin's "xx面板" regex cannot also match it.
-    results = await drive(plugin.show_operator(StubEvent("/方舟干员 阿米娅")))
+    results = await drive(plugin.show_operator(StubEvent("/ark干员 阿米娅")))
     check(
-        "方舟干员 <名称> renders the detail card",
+        "ark干员 <名称> renders the detail card",
         results and results[0][0] == "chain" and Path(results[0][1][0].path).is_file(),
     )
 
-    results = await drive(plugin.show_operator(StubEvent("/方舟面板 阿米娅")))
+    results = await drive(plugin.show_operator(StubEvent("/ark面板 阿米娅")))
     check(
-        "方舟面板 alias works too",
+        "ark面板 alias works too",
         results and results[0][0] == "chain" and Path(results[0][1][0].path).is_file(),
     )
 
-    results = await drive(plugin.show_operator(StubEvent("/方舟干员 不存在")))
+    results = await drive(plugin.show_operator(StubEvent("/ark干员 不存在")))
     check(
         "unknown operator reports a friendly hint",
         results and results[0][0] == "plain" and "未找到干员" in results[0][1],
     )
 
-    results = await drive(plugin.show_operator(StubEvent("/方舟干员")))
+    results = await drive(plugin.show_operator(StubEvent("/ark干员")))
     check(
-        "方舟干员 without a name prints usage",
+        "ark干员 without a name prints usage",
         results and results[0][0] == "plain" and "用法" in results[0][1],
     )
 
-    results = await drive(plugin.do_sign(StubEvent("/方舟签到")))
-    check("方舟签到 reports the awards", results and "合成玉x500" in results[0][1])
+    results = await drive(plugin.do_sign(StubEvent("/ark签到")))
+    check("ark签到 reports the awards", results and "合成玉x500" in results[0][1])
 
-    results = await drive(plugin.list_bindings(StubEvent("/方舟绑定列表")))
+    results = await drive(plugin.list_bindings(StubEvent("/ark绑定列表")))
     check(
-        "方舟绑定列表 shows the role but never the token",
+        "ark绑定列表 shows the role but never the token",
         results and "token" not in results[0][1] and "1. 探姬#9315" in results[0][1],
         results[0][1].replace("\n", " | ") if results else "no result",
     )
 
-    results = await drive(plugin.show_help(StubEvent("/方舟帮助")))
-    check("方舟帮助 renders the help card", results and results[0][0] == "chain")
+    results = await drive(plugin.show_help(StubEvent("/ark帮助")))
+    check("ark帮助 renders the help card", results and results[0][0] == "chain")
 
     # Scheduler configuration
     plugin.config = {"sign_time": "03:30", "sanity_poll_interval": 5}
