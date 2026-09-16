@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 ASSET_PATTERN = re.compile(r"__ASSET__/([A-Za-z0-9_./-]+)")
 CACHE_MAX_AGE_SECONDS = 300
 
+# Preferred device pixel ratio, and Chromium's hard screenshot texture limit.
+DEVICE_SCALE_FACTOR = 2.0
+MAX_TEXTURE_PX = 16384
+
 
 class Renderer:
     """Render Jinja2 templates to JPEG cards."""
@@ -170,7 +174,8 @@ class Renderer:
         context = None
         try:
             context = await self._browser.new_context(
-                device_scale_factor=2, viewport={"width": 1000, "height": 800}
+                device_scale_factor=DEVICE_SCALE_FACTOR,
+                viewport={"width": 1000, "height": 800},
             )
             page = await context.new_page()
             await page.set_content(html, wait_until="load", timeout=self.timeout_ms)
@@ -180,7 +185,29 @@ class Renderer:
                 "img => img.complete ? null : new Promise(resolve => {"
                 " img.onload = resolve; img.onerror = resolve; })))"
             )
+            # Chromium caps screenshots at 16384px of texture, so a tall page
+            # rendered at 2x would be silently truncated past 8192 CSS px.
+            # Measure first and drop to 1x when the page is too tall.
             box = await page.locator("body > *").first.bounding_box()
+            if box and box["height"] * DEVICE_SCALE_FACTOR > MAX_TEXTURE_PX:
+                logger.info(
+                    "页面高度 %.0fpx 超过 %.1fx 的安全上限，降级为 1x 渲染",
+                    box["height"],
+                    DEVICE_SCALE_FACTOR,
+                )
+                await page.close()
+                await context.close()
+                context = await self._browser.new_context(
+                    device_scale_factor=1, viewport={"width": 1000, "height": 800}
+                )
+                page = await context.new_page()
+                await page.set_content(html, wait_until="load", timeout=self.timeout_ms)
+                await page.evaluate(
+                    "() => Promise.all(Array.from(document.images).map("
+                    "img => img.complete ? null : new Promise(resolve => {"
+                    " img.onload = resolve; img.onerror = resolve; })))"
+                )
+                box = await page.locator("body > *").first.bounding_box()
             if box:
                 await page.set_viewport_size(
                     {"width": int(box["width"]) + 2, "height": int(box["height"]) + 2}

@@ -417,40 +417,43 @@ async def main() -> int:
     # ── 公告：列表出图、按编号看正文、失败给出明确提示 ──
     ANNOUNCE_FIXTURE = [
         {
-            "id": "2069",
-            "title": "05月08日 闪断更新公告",
+            "id": "7367",
+            "title": "[明日方舟]09月11日16:00闪断更新公告",
+            "author": "【明日方舟】运营组",
+            "brief": "计划将于09月11日进行服务器闪断更新。",
             "group": "SYSTEM",
             "group_cn": "系统",
-            "url": "https://example.invalid/2069.html",
-            "ts": 1746619406,
-            "date_text": "2025-05-08 02:03",
+            "url": "https://ak.hypergryph.com/news/7367",
+            "ts": 1789095600,
+            "date_text": "2026-09-11 11:00",
         },
         {
-            "id": "2068",
-            "title": "【布道自由】 限定寻访开启",
+            "id": "9681",
+            "title": "[活动预告]「月行水上」限时活动即将开启",
+            "author": "【明日方舟】运营组",
+            "brief": "活动期间将开放活动关卡。",
             "group": "ACTIVITY",
             "group_cn": "活动",
-            "url": "https://example.invalid/2068.html",
-            "ts": 1746074007,
-            "date_text": "2025-05-01 17:53",
+            "url": "https://ak.hypergryph.com/news/9681",
+            "ts": 1787900000,
+            "date_text": "2026-08-29 11:00",
         },
     ]
 
     async def fake_announce():
         return ANNOUNCE_FIXTURE
 
-    async def fake_focus():
-        return "2068"
-
-    async def fake_detail(url, text_limit=1200, max_images=6):
+    async def fake_detail(cid):
         return {
+            "cid": cid,
+            "url": f"https://ak.hypergryph.com/news/{cid}",
+            "body_html": "<p>公告<b>正文</b>摘要</p>",
             "text": "公告正文摘要",
             "images": ["https://example.invalid/a.jpg"],
             "image_total": 1,
         }
 
     plugin._announce.fetch = fake_announce
-    plugin._announce.focus_id = fake_focus
     plugin._announce.fetch_detail = fake_detail
 
     results = await drive(plugin.show_announcements(StubEvent("/方舟公告")))
@@ -459,15 +462,10 @@ async def main() -> int:
         results and results[0][0] == "chain" and Path(results[0][1][0].path).is_file(),
     )
 
-    results = await drive(plugin.show_announcements(StubEvent("/方舟公告 2068")))
-    body_text = results[0][1][0].text if results and results[0][0] == "chain" else ""
+    results = await drive(plugin.show_announcements(StubEvent("/方舟公告 7367")))
     check(
-        "方舟公告 <编号> returns text and artwork",
-        bool(results)
-        and "公告正文摘要" in body_text
-        and "2068" in body_text
-        and len(results[0][1]) == 2,
-        f"{len(results[0][1]) if results else 0} 个消息段",
+        "方舟公告 <编号> renders the body card",
+        results and results[0][0] == "chain" and Path(results[0][1][0].path).is_file(),
     )
 
     results = await drive(plugin.show_announcements(StubEvent("/方舟公告 9999")))

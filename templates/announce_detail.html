@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+      .ann-head {
+        margin-bottom: 4px;
+      }
+      .ann-title {
+        font-size: 25px;
+        font-weight: 700;
+        line-height: 1.4;
+        letter-spacing: 0.5px;
+      }
+      .ann-title::before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 22px;
+        margin-right: 11px;
+        background: var(--accent);
+        vertical-align: -2px;
+      }
+      .ann-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 10px 0 0;
+        font-size: 11.5px;
+        color: var(--muted);
+        letter-spacing: 1px;
+      }
+      .ann-meta .tag {
+        font-size: 10px;
+        letter-spacing: 1.2px;
+        padding: 2px 8px;
+        border: 1px solid var(--accent);
+        color: var(--accent);
+      }
+      /* The body is the site's own rich text: paragraphs, emphasis and inline
+         artwork. Only the outer frame comes from this plugin. */
+      .body {
+        font-size: 14.5px;
+        line-height: 1.85;
+        color: var(--text);
+        word-break: break-word;
+      }
+      .body p {
+        margin: 0 0 0.85em;
+      }
+      .body strong,
+      .body b {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .body em {
+        color: var(--label);
+      }
+      .body img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        margin: 0.9em auto;
+        border: 1px solid var(--line);
+      }
+      .body br {
+        line-height: 1.85;
+      }
+      .body a {
+        color: var(--accent);
+        text-decoration: none;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="ann-head">
+        <div class="ann-title">{{ announce.title }}</div>
+        <div class="ann-meta">
+          <span class="tag">{{ announce.group_cn }}</span>
+          <span>{{ announce.date_text or "时间未知" }}</span>
+          {% if announce.author %}<span>{{ announce.author }}</span>{% endif %}
+          <span style="margin-left: auto">编号 {{ announce.id }}</span>
+        </div>
+      </div>
+      <div class="stripes"></div>
+
+      <div class="panel" style="margin-bottom: 0">
+        <div class="body">{{ announce.body_html | safe }}</div>
+      </div>
+
+      <div class="card-footer">
+        <span>© HYPERGRYPH · 共 {{ announce.image_total }} 张配图</span>
+        <span><span class="barcode"></span><span class="serial">RI-NEWS-{{ announce.id }}</span></span>
+      </div>
+    </div>
+  </body>
+</html>

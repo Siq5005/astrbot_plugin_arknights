@@ -49,15 +49,6 @@
         border-color: var(--accent);
         color: var(--accent);
       }
-      .ann.focus {
-        background: rgba(255, 180, 0, 0.05);
-      }
-      .ann.focus .ann-title::after {
-        content: " 置顶";
-        font-size: 10px;
-        color: var(--accent);
-        letter-spacing: 1px;
-      }
       .count {
         display: flex;
         border: 1px solid var(--line);
@@ -98,7 +89,7 @@
       </div>
 
       {% for item in announce.records %}
-      <div class="ann {% if item.is_focus %}focus{% endif %}">
+      <div class="ann">
         <span class="ann-id">#{{ item.id }}</span>
         <span class="ann-body">
           <span class="ann-title">{{ item.title }}</span>

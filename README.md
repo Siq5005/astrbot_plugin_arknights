@@ -166,7 +166,7 @@ astrbot_plugin_arknights/
 | 指令 | 说明 | 场景 |
 |:-----|:-----|:-----|
 | `方舟公告` | 公告列表（活动 / 系统分类、置顶标记） | 全部 |
-| `方舟公告 <编号>` | 查看指定公告正文 | 全部 |
+| `方舟公告 <编号>` | 渲染指定公告的**详情卡片**（保留官方富文本排版与内嵌配图） | 全部 |
 | `方舟订阅公告` / `方舟取消订阅公告` | 有新公告时私聊推送 | 私聊 |
 
 > 💡 发送 `方舟帮助` 可查看图片版指令菜单。
@@ -276,7 +276,7 @@ astrbot_plugin_arknights/
 | 抽卡记录 | 鹰角官网 `ak.hypergryph.com` |
 | 卡池元数据（名称 / 时间 / 规则类型） | `yuanyan3060/ArknightsGameResource` 的 `gacha_table.json` |
 | 卡池 UP 名单 | PRTS `weedy.prts.wiki/gacha_table.json` |
-| 官方公告 | `ak-conf.hypergryph.com` 的游戏内公告配置 |
+| 官方公告 | 官网 `ak.hypergryph.com/news`（列表与正文均从页面解析；原 `ak-conf.hypergryph.com` 的配置自 2025-05 起未再更新，已弃用） |
 
 > 本项目与鹰角网络、PRTS Wiki、上述资源仓库无隶属关系，仅使用其公开资源；如相关方有异议会立即移除。
 

@@ -1428,45 +1428,29 @@ class ArknightsPlugin(Star):
                 yield event.plain_result(f"没有找到编号为 {wanted} 的公告。")
                 return
             try:
-                detail = await self._announce.fetch_detail(
-                    target["url"],
-                    max_images=max(
-                        1, int(self.config.get("announce_max_images", 6) or 6)
-                    ),
-                )
+                detail = await self._announce.fetch_detail(target["id"])
             except AnnounceError as exc:
                 yield event.plain_result(f"公告正文获取失败：{exc}")
                 return
-            header = (
+            context = {**target, **detail}
+            image = await self._render("announce_detail.html", {"announce": context})
+            if image is not None:
+                yield event.chain_result([Image.fromFileSystem(str(image))])
+                return
+            # text fallback keeps the announcement readable without a browser
+            yield event.plain_result(
                 f"[{target['group_cn']}] {target['title']}\n"
                 f"{target['date_text']} · 编号 {target['id']}"
-            )
-            # Announcement bodies are mostly artwork, so the images are the
-            # content and the flattened text is only the caption.
-            extra = ""
-            if detail["image_total"] > len(detail["images"]):
-                extra = (
-                    f"\n（共 {detail['image_total']} 张图，仅推送前 "
-                    f"{len(detail['images'])} 张）"
+                + (
+                    f"\n（共 {detail['image_total']} 张配图）"
+                    if detail["image_total"]
+                    else ""
                 )
-            text = header
-            if detail["text"]:
-                text += f"\n\n{detail['text']}"
-            text += extra
-            chain: list[Any] = [Plain(text)]
-            for image_url in detail["images"]:
-                chain.append(Image.fromURL(image_url))
-            yield event.chain_result(chain)
+                + f"\n\n{detail['text'][:1200]}"
+            )
             return
 
-        try:
-            focus = await self._announce.focus_id()
-        except AnnounceError:
-            focus = ""
-        items = [
-            {**record, "is_focus": bool(focus) and record["id"] == focus}
-            for record in records[:15]
-        ]
+        items = list(records[:15])
         # NOTE: the key must not be "items" — Jinja resolves announce.items to
         # the dict's own .items method and the loop then fails.
         context = {
