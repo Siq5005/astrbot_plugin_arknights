@@ -51,7 +51,7 @@ from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
-PLUGIN_VERSION = "0.3.2"
+PLUGIN_VERSION = "0.3.3"
 
 # Seconds the QR code stays valid, and how often it is polled.
 QR_TIMEOUT = 120

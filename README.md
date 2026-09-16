@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.3.2-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.3.3-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -353,6 +353,11 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.3.3 (2026-09-17)
+
+- 🐛 **修复签到恒返回 `400 Bad Request`**：`core/skland.py` 里只有签到这一个请求用原始 body 发送（`content=`），而 httpx 只在 `json=` 时才自动补 `Content-Type`。缺这个头会被森空岛判为请求非法，于是**签到单独失败、其它接口全部正常**。签名请求现在带 body 时显式补 `Content-Type: application/json`
+- 🐛 **失败原因不再被吞掉**：原来 4xx 直接 `raise_for_status()`，森空岛在响应体里给出的真实原因（如「登录状态已失效」）被丢弃，用户只看到无意义的 `400 Bad Request`。现在 4xx 会先解析响应体，优先透出森空岛自己的 `message`，取不到时才回退到状态码
 
 ### 0.3.2 (2026-09-16)
 

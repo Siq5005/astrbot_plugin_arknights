@@ -504,10 +504,24 @@ class SklandClient:
                 resp = await client.request(
                     method, url, headers=headers, json=json_data
                 )
-            resp.raise_for_status()
-            return resp.json()
         except httpx.HTTPError as exc:
             raise SklandError(f"请求失败: {exc}") from exc
+
+        if resp.status_code >= 400:
+            # Skland explains the real reason in the body even on a 4xx.
+            # raise_for_status() would discard it and leave the user staring at
+            # a bare "400 Bad Request".
+            detail = ""
+            try:
+                payload = resp.json()
+            except ValueError:
+                payload = None
+            if isinstance(payload, dict):
+                detail = str(payload.get("message") or payload.get("msg") or "")
+            raise SklandError(detail or f"请求失败: HTTP {resp.status_code}")
+
+        try:
+            return resp.json()
         except ValueError as exc:
             raise SklandError("响应格式异常") from exc
 
@@ -607,6 +621,12 @@ class SklandClient:
             "cred": cred.cred,
             "sign": sign,
         }
+        if body is not None:
+            # httpx only infers this for ``json=``; a raw body would otherwise go
+            # out without it and Skland rejects that with 400. Attendance
+            # sign-in is the only request that sends a raw signed body, which is
+            # why it was the only endpoint returning 400.
+            headers["Content-Type"] = "application/json"
         headers.update({key: str(value) for key, value in header_ca.items()})
         return headers
 

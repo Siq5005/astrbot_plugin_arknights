@@ -151,3 +151,47 @@ def test_parse_sanity_extrapolates():
     parsed = SklandClient.parse_sanity(data, now=1_000_000.0)
     assert parsed["current"] == 125
     assert parsed["max"] == 135
+
+
+@pytest.mark.anyio
+async def test_sign_arknights_sends_a_json_content_type():
+    """Attendance is the only raw-body POST, and Skland 400s without the header."""
+    seen = {}
+
+    def handler(request):
+        seen["content-type"] = request.headers.get("content-type")
+        seen["body"] = request.content
+        return httpx.Response(200, json={"code": 0, "data": {"awards": []}})
+
+    from core.skland import UserBinding
+
+    await _client(handler).sign_arknights(CRED, UserBinding(uid="1"))
+    assert seen["content-type"] == "application/json"
+    # the signed bytes must be the transmitted bytes
+    assert seen["body"] == b'{"gameId":"1","uid":"1"}'
+
+
+@pytest.mark.anyio
+async def test_http_error_surfaces_sklands_own_message():
+    """A bare status code is useless; Skland explains the reason in the body."""
+
+    def handler(request):
+        return httpx.Response(400, json={"code": 10002, "message": "登录状态已失效"})
+
+    from core.skland import UserBinding
+
+    with pytest.raises(SklandError) as excinfo:
+        await _client(handler).sign_arknights(CRED, UserBinding(uid="1"))
+    assert "登录状态已失效" in str(excinfo.value)
+
+
+@pytest.mark.anyio
+async def test_http_error_without_a_body_still_reports_the_status():
+    def handler(request):
+        return httpx.Response(400, text="<html>gateway</html>")
+
+    from core.skland import UserBinding
+
+    with pytest.raises(SklandError) as excinfo:
+        await _client(handler).sign_arknights(CRED, UserBinding(uid="1"))
+    assert "400" in str(excinfo.value)
