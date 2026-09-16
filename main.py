@@ -10,6 +10,7 @@ import asyncio
 import base64
 import io
 import random
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -20,8 +21,10 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
-from astrbot.api.message_components import Image, Plain
+from astrbot.api.message_components import At, AtAll, Image, Plain, Reply
 from astrbot.api.star import Context, Star, register
+from astrbot.core.star.filter.command import CommandFilter
+from astrbot.core.star.star_handler import EventType, star_handlers_registry
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
 from .core.cards import build_note_context, build_sanity_context
@@ -1351,3 +1354,54 @@ class ArknightsPlugin(Star):
                 f"{'★' * stars} {name} · {pool}" + (f" · {stamp}" if stamp else "")
             )
         yield event.plain_result("\n".join(lines))
+
+    # ── 漏写唤醒前缀提醒 ───────────────────────────────────────────────────
+    # 群聊里指令必须带唤醒前缀（本部署为 ~）。用户漏写时 AstrBot 不会唤醒
+    # 事件，CommandFilter 因 is_at_or_wake_command 为假而全部跳过，于是消息
+    # 落到主管道被 LLM 答成"我没有这个功能"。这里在最后拦一刀并给出正确写法。
+    #
+    # 命令名不手写：扫描本模块已注册的 CommandFilter（含 alias），避免以后
+    # 新增指令后清单漂移。因此本处理器必须是类的最后一个方法。
+    _HINT_CMDS = tuple(
+        sorted(
+            {
+                _name
+                for _md in star_handlers_registry.get_handlers_by_event_type(
+                    EventType.AdapterMessageEvent, only_activated=False
+                )
+                if _md.handler_module_path == __name__
+                for _f in _md.event_filters
+                if isinstance(_f, CommandFilter)
+                for _name in (_f.command_name, *_f.alias)
+            }
+        )
+    )
+
+    @filter.regex(
+        r"^[/!！.。,，、]?\s*(?:"
+        + "|".join(re.escape(_c) for _c in _HINT_CMDS)
+        + r")(?:\s.*)?$"
+    )
+    async def missing_prefix_hint(self, event: AstrMessageEvent):
+        """Hint the correct wake prefix when a command is sent without it."""
+        raw = "".join(
+            seg.text for seg in event.get_messages() if isinstance(seg, Plain)
+        ).strip()
+        if raw.startswith(("~", "～")):
+            return  # 前缀正确，交给真正的指令处理器
+        # 被 @ 唤醒时用户没有漏写前缀，不能抢答
+        if event.is_at_or_wake_command:
+            return
+        if any(isinstance(seg, (At, AtAll, Reply)) for seg in event.get_messages()):
+            return
+        cmd = re.sub(r"^[/!！.。,，、]+", "", raw).strip()
+        cmd = re.split(r"\s+", cmd, maxsplit=1)[0]
+        if cmd not in self._HINT_CMDS:
+            return
+        # 拦下这条消息，避免被主管道 LLM 抢答
+        event.stop_event()
+        yield event.plain_result(
+            f"「{cmd}」要带唤醒前缀喵 (・_・?)\n"
+            f"本群的指令前面要加 ~ ，所以是：~{cmd}\n"
+            f"想不起来有哪些就发 ~方舟帮助 看菜单"
+        )

@@ -87,6 +87,8 @@ PLAYER = {
     "campaign": {"reward": {"current": 1200, "total": 1725}},
 }
 
+PLUGIN_NAME = "astrbot_plugin_arknights"
+
 EXPECTED_COMMANDS = {
     "方舟帮助",
     "方舟绑定",
@@ -160,11 +162,32 @@ def check(name: str, condition: bool, detail: str = "") -> None:
 class StubEvent:
     """Duck-typed stand-in for AstrMessageEvent covering the handlers' surface."""
 
-    def __init__(self, text: str, sender: str = "10001", private: bool = True) -> None:
+    def __init__(
+        self,
+        text: str,
+        sender: str = "10001",
+        private: bool = True,
+        at_or_wake: bool = False,
+        mentions: bool = False,
+    ) -> None:
         self.message_str = text
         self.unified_msg_origin = f"test:PrivateMessage:{sender}"
         self._sender = sender
         self._private = private
+        self.is_at_or_wake_command = at_or_wake
+        self._mentions = mentions
+        self.stopped = False
+
+    def get_messages(self):
+        from astrbot.api.message_components import At, Plain
+
+        segments = [Plain(self.message_str)]
+        if self._mentions:
+            segments.insert(0, At(qq="10000"))
+        return segments
+
+    def stop_event(self) -> None:
+        self.stopped = True
 
     def get_sender_id(self) -> str:
         return self._sender
@@ -197,6 +220,28 @@ def registered_commands() -> set[str]:
                 names.add(command_name)
                 names.update(getattr(event_filter, "alias", set()) or set())
     return names
+
+
+def interceptor_regex(plugin_name: str, handler_name: str):
+    """Return a plugin's missing-prefix interceptor regex.
+
+    Args:
+        plugin_name: Plugin directory name, e.g. ``astrbot_plugin_arknights``.
+        handler_name: Handler method name.
+
+    Returns:
+        The compiled pattern, or ``None`` when the plugin has no such handler.
+    """
+    for handler in star_handlers_registry._handlers:
+        if plugin_name not in (handler.handler_module_path or ""):
+            continue
+        if handler.handler_name != handler_name:
+            continue
+        for event_filter in handler.event_filters:
+            pattern = getattr(event_filter, "regex", None)
+            if pattern is not None:
+                return pattern
+    return None
 
 
 def astrbot_detected_conflicts() -> dict[str, list[str]]:
@@ -285,6 +330,76 @@ async def main() -> int:
             + (f"：{sorted(others)}" if others else "")
             + "）"
         )
+
+    # ── 漏写前缀拦截器：只认自己的命令名，且不抢终末地的名字 ──
+    mine = plugin_module.ArknightsPlugin._HINT_CMDS
+    check(
+        "拦截器覆盖了全部本插件命令名",
+        set(EXPECTED_COMMANDS) <= set(mine),
+        f"{len(mine)} 个",
+    )
+    my_regex = interceptor_regex(PLUGIN_NAME, "missing_prefix_hint")
+    check("拦截器正则已注册", my_regex is not None)
+    if my_regex is not None:
+        unmatched = [name for name in mine if not my_regex.search(name)]
+        check(
+            "拦截器正则能匹配每一个本插件命令名",
+            not unmatched,
+            f"未匹配: {unmatched}" if unmatched else f"{len(mine)}/{len(mine)}",
+        )
+        stolen = [name for name in ENDFIELD_COMMANDS if my_regex.search(name)]
+        check(
+            "拦截器不会抢终末地的命令名",
+            not stolen,
+            f"抢到: {stolen}" if stolen else "0 conflicts",
+        )
+
+    if endfield_loaded:
+        their_regex = interceptor_regex(
+            "astrbot_plugin_endfield", "missing_prefix_hint"
+        )
+        if their_regex is not None:
+            hit = [name for name in mine if their_regex.search(name)]
+            check(
+                "终末地拦截器不会命中本插件的命令名",
+                not hit,
+                f"命中: {hit}" if hit else "0 hits",
+            )
+            # 反向：终末地自己的名字也不该被本插件抢
+            collide = [
+                name
+                for name in ("便签", "理智", "签到", "干员列表", "公告", "日历")
+                if my_regex is not None and my_regex.search(name)
+            ]
+            check(
+                "本插件拦截器不碰裸指令名",
+                not collide,
+                f"命中: {collide}" if collide else "0 hits",
+            )
+
+    # ── 拦截器行为：漏前缀给提示、带前缀与 @ 时让路 ──
+    hints = await drive(
+        plugin_module.ArknightsPlugin.missing_prefix_hint(
+            plugin_module.ArknightsPlugin,
+            StubEvent("方舟理智"),
+        )
+    )
+    check(
+        "漏写 ~ 时给出提示并拦下消息",
+        hints and hints[0][0] == "plain" and "~方舟理智" in hints[0][1],
+        hints[0][1].replace("\n", " | ") if hints else "no result",
+    )
+    for label, kwargs in (
+        ("带 ~ 前缀时让路", {"text": "~方舟理智"}),
+        ("被 @ 唤醒时让路", {"text": "方舟理智", "at_or_wake": True}),
+        ("消息含 @ 他人时让路", {"text": "方舟理智", "mentions": True}),
+    ):
+        quiet = await drive(
+            plugin_module.ArknightsPlugin.missing_prefix_hint(
+                plugin_module.ArknightsPlugin, StubEvent(**kwargs)
+            )
+        )
+        check(f"拦截器{label}", not quiet, f"yielded {quiet}" if quiet else "silent")
 
     plugin = plugin_module.ArknightsPlugin(
         context=SimpleNamespace(send_message=None), config={}
