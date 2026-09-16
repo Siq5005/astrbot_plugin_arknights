@@ -192,6 +192,28 @@ def registered_commands() -> set[str]:
     return names
 
 
+def astrbot_detected_conflicts() -> dict[str, list[str]]:
+    """Ask AstrBot's own command manager which command names are claimed twice.
+
+    AstrBot ships a command management module that powers the dashboard's
+    conflict view. Its grouping helper needs no database, so it is reused here to
+    check this plugin against every other plugin loaded into the process.
+
+    Returns:
+        Mapping of duplicated command name to the plugins claiming it.
+    """
+    from astrbot.core.star.command_management import (  # noqa: PLC0415
+        _collect_descriptors,
+        _group_conflicts,
+    )
+
+    descriptors = _collect_descriptors(include_sub_commands=False)
+    return {
+        name: [desc.plugin_name for desc in group]
+        for name, group in _group_conflicts(descriptors).items()
+    }
+
+
 async def drive(agen) -> list:
     """Collect the yielded results of a command handler."""
     return [item async for item in agen]
@@ -225,6 +247,37 @@ async def main() -> int:
         not overlap,
         f"colliding: {sorted(overlap)}" if overlap else "0 collisions",
     )
+
+    # Cross-check with AstrBot's own conflict detector, with the Endfield plugin
+    # loaded into the same process so the registry holds both plugins.
+    endfield_loaded = False
+    try:
+        import data.plugins.astrbot_plugin_endfield.main  # noqa: F401, PLC0415
+
+        endfield_loaded = True
+    except Exception as exc:  # noqa: BLE001 - the check degrades to a notice
+        print(f"[SKIP] astrbot_plugin_endfield 未加载，跳过交叉冲突检测: {exc}")
+
+    if endfield_loaded:
+        conflicts = astrbot_detected_conflicts()
+        mine = {
+            name: plugins
+            for name, plugins in conflicts.items()
+            if any("arknights" in (plugin or "") for plugin in plugins)
+        }
+        check(
+            "AstrBot 自带冲突检测未报告本插件冲突",
+            not mine,
+            f"冲突: {mine}" if mine else "0 conflicts",
+        )
+        others = {
+            name: plugins for name, plugins in conflicts.items() if name not in mine
+        }
+        print(
+            f"       （其他插件之间存在 {len(others)} 组冲突，与本插件无关"
+            + (f"：{sorted(others)}" if others else "")
+            + "）"
+        )
 
     plugin = plugin_module.ArknightsPlugin(
         context=SimpleNamespace(send_message=None), config={}
