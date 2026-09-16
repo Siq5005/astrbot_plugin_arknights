@@ -118,7 +118,29 @@ python tests/render_preview.py
 
 > 需要特别说明：终末地插件与抽卡查询插件均为 AGPL-3.0。为保持本项目 MIT 许可，其代码（包括渲染器）均未被复制或移植，相关能力为独立实现。若将来需要复用它们的代码，本项目必须改为 AGPL-3.0 发布。
 
-素材资源来自 PRTS Wiki 的官方游戏资源镜像（`torappu.prts.wiki`）。
+### 图像资源出处
+
+卡片里的图片全部来自公开的游戏资源镜像，**每一个路径在写进代码前都实测过 HTTP 200**，没有猜测：
+
+| 资源 | 用途 | 来源 |
+|---|---|---|
+| `torappu.prts.wiki/assets` | 干员头像、精英化立绘、技能图标 | PRTS Wiki 的官方资源镜像 |
+| [Aceship/Arknight-Images](https://github.com/Aceship/Arknight-Images) | 职业徽章（`classes/class_*.png`）、稀有度 / 精英化 / 潜能标记（`ui/rank`、`ui/elite`、`ui/potential`）、基建设施图标（`ui/infrastructure`）、时装立绘（`portraits/`）、物品图标（`items/`） | GitHub |
+| [yuanyan3060/ArknightsGameResource](https://github.com/yuanyan3060/ArknightsGameResource) | 时装立绘（`skin/`）、物品稀有度框（`item_rarity_img/`）、基建技能图标（`building_skill/`）、游戏数据表（`gamedata/excel/`，用于卡池与 UP 名单） | GitHub |
+
+图片经 `cdn.jsdelivr.net` 的 GitHub 镜像加载（国内可达性优于 `raw.githubusercontent.com`）。
+
+### 数据来源
+
+| 数据 | 来源 |
+|---|---|
+| 账号、签到、便签、理智、干员、基建、剿灭、集成战略、任务、公招 | 森空岛官方接口 |
+| 抽卡记录 | 鹰角官网 `ak.hypergryph.com` |
+| 卡池元数据（名称 / 时间 / 规则类型） | `yuanyan3060/ArknightsGameResource` 的 `gacha_table.json` |
+| 卡池 UP 名单 | PRTS `weedy.prts.wiki/gacha_table.json` |
+| 官方公告 | `ak-conf.hypergryph.com` 的游戏内公告配置 |
+
+> 本项目与鹰角网络、PRTS Wiki、上述资源仓库无隶属关系，仅使用其公开资源；如相关方有异议会立即移除。
 
 ## 许可
 
