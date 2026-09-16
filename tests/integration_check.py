@@ -39,6 +39,18 @@ from core.render import Renderer  # noqa: E402
 from core.skland import SignInResult  # noqa: E402
 from core.store import Store  # noqa: E402
 
+# Importing the plugin initialises AstrBot's logging, which installs a file sink
+# pointed at the live astrbot.log. This run loads the plugin with fixture config,
+# so lines such as the scheduler banner are indistinguishable from production
+# there — a "签到 03:30" banner from this file was once mistaken for the live
+# setting. Drop the sinks and keep reporting through stdout.
+try:
+    from loguru import logger as _loguru_logger
+
+    _loguru_logger.remove()
+except Exception:  # noqa: BLE001 - logging setup is best effort
+    pass
+
 NOW = time.time()
 
 OPERATORS = [
