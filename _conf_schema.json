@@ -1,0 +1,31 @@
+{
+  "render_timeout": {
+    "description": "图片渲染超时时间(ms)",
+    "type": "int",
+    "default": 30000
+  },
+  "data_ttl": {
+    "description": "玩家数据缓存时间(秒)",
+    "type": "int",
+    "default": 300,
+    "hint": "同一账号重复查询在该时间内直接复用缓存，避免频繁请求触发风控"
+  },
+  "sign_time": {
+    "description": "每日自动签到时间",
+    "type": "string",
+    "default": "00:05",
+    "hint": "格式 HH:MM"
+  },
+  "sanity_poll_interval": {
+    "description": "理智订阅轮询间隔(分钟)",
+    "type": "int",
+    "default": 20,
+    "hint": "建议 10-30，过短可能触发风控"
+  },
+  "max_bindings": {
+    "description": "单用户最大绑定数",
+    "type": "int",
+    "default": 5,
+    "hint": "0 表示不限制"
+  }
+}

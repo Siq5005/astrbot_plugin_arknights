@@ -601,7 +601,10 @@ async def test_create_qr_returns_scan_id_and_url():
             200,
             json={
                 "status": 0,
-                "data": {"scanId": "abc", "scanUrl": "hypergryph://scan_login?scanId=abc"},
+                "data": {
+                    "scanId": "abc",
+                    "scanUrl": "hypergryph://scan_login?scanId=abc",
+                },
             },
         )
 
@@ -753,12 +756,18 @@ def test_char_avatar_url():
 
 
 def test_char_portrait_defaults_to_elite_two():
-    assert assets.char_portrait("char_002_amiya").endswith("/char_portrait/char_002_amiya_2.png")
-    assert assets.char_portrait("char_002_amiya", 1).endswith("/char_portrait/char_002_amiya_1.png")
+    assert assets.char_portrait("char_002_amiya").endswith(
+        "/char_portrait/char_002_amiya_2.png"
+    )
+    assert assets.char_portrait("char_002_amiya", 1).endswith(
+        "/char_portrait/char_002_amiya_1.png"
+    )
 
 
 def test_skill_icon_url():
-    assert assets.skill_icon("skchr_amiya_3").endswith("/skill_icon/skill_icon_skchr_amiya_3.png")
+    assert assets.skill_icon("skchr_amiya_3").endswith(
+        "/skill_icon/skill_icon_skchr_amiya_3.png"
+    )
 ```
 
 - [ ] **Step 2: 运行测试确认失败**
@@ -864,7 +873,9 @@ git add -A && git commit -m "feat: add player note card"
 在 `tests/test_sanity_format.py` 中：
 
 ```python
-from main import format_remaining  # 若 main 导入 astrbot 导致不可测，则把该函数放到 core/assets.py 同级的新模块
+from main import (
+    format_remaining,
+)  # 若 main 导入 astrbot 导致不可测，则把该函数放到 core/assets.py 同级的新模块
 
 
 def test_format_remaining_hours_and_minutes():
