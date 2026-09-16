@@ -126,6 +126,7 @@ class Store:
         token: str,
         skland_nickname: str,
         bindings: list[dict[str, Any]],
+        umo: str = "",
     ) -> None:
         """Store a freshly authenticated account and its game bindings.
 
@@ -137,6 +138,8 @@ class Store:
             token: Hypergryph passport token.
             skland_nickname: Display name reported by Skland.
             bindings: Binding entries, each containing at least a ``uid``.
+            umo: Unified message origin of the private session that bound the
+                account, used later for proactive notifications.
         """
         user_key = str(user_key)
         async with self._lock:
@@ -153,6 +156,7 @@ class Store:
                 "skland_nickname": skland_nickname,
                 "bindings": list(bindings),
                 "primary_uid": primary,
+                "umo": umo or existing.get("umo") or "",
                 "created_at": existing.get("created_at") or now,
                 "updated_at": now,
             }
@@ -231,49 +235,67 @@ class Store:
         """Delete a user record and any per-user subscription entries."""
         data["users"].pop(user_key, None)
         data["subs"]["sanity"] = [
-            item for item in data["subs"]["sanity"] if item != user_key
+            item
+            for item in data["subs"]["sanity"]
+            if str(item.get("user_key", "")) != user_key
         ]
 
-    async def list_sanity_subs(self) -> list[str]:
-        """Return user keys subscribed to sanity-full notifications."""
-        async with self._lock:
-            return list(self._read()["subs"]["sanity"])
+    async def list_sanity_subs(self) -> list[dict[str, str]]:
+        """Return the sanity-full notification targets.
 
-    async def set_sanity_sub(self, user_key: str, enabled: bool) -> None:
+        Returns:
+            One entry per subscriber with ``user_key`` and ``umo``.
+        """
+        async with self._lock:
+            return [dict(item) for item in self._read()["subs"]["sanity"]]
+
+    async def set_sanity_sub(self, user_key: str, umo: str, enabled: bool) -> None:
         """Enable or disable sanity-full notifications for a user.
 
         Args:
             user_key: Platform user identifier.
+            umo: Session to notify; required when enabling.
             enabled: Desired subscription state.
         """
         user_key = str(user_key)
         async with self._lock:
             data = self._read()
-            subs = data["subs"]["sanity"]
-            if enabled and user_key not in subs:
-                subs.append(user_key)
-            elif not enabled and user_key in subs:
-                subs.remove(user_key)
+            subs = [
+                item
+                for item in data["subs"]["sanity"]
+                if str(item.get("user_key", "")) != user_key
+            ]
+            if enabled:
+                subs.append({"user_key": user_key, "umo": str(umo)})
+            data["subs"]["sanity"] = subs
             self._write(data)
 
-    async def list_sign_groups(self) -> list[str]:
-        """Return group ids subscribed to automatic sign-in results."""
-        async with self._lock:
-            return list(self._read()["subs"]["sign_groups"])
+    async def list_sign_groups(self) -> list[dict[str, str]]:
+        """Return the group notification targets for automatic sign-in.
 
-    async def set_sign_group(self, group_id: str, enabled: bool) -> None:
+        Returns:
+            One entry per group with ``group_id`` and ``umo``.
+        """
+        async with self._lock:
+            return [dict(item) for item in self._read()["subs"]["sign_groups"]]
+
+    async def set_sign_group(self, group_id: str, umo: str, enabled: bool) -> None:
         """Enable or disable sign-in notifications for a group.
 
         Args:
             group_id: Platform group identifier.
+            umo: Group session to notify; required when enabling.
             enabled: Desired subscription state.
         """
         group_id = str(group_id)
         async with self._lock:
             data = self._read()
-            groups = data["subs"]["sign_groups"]
-            if enabled and group_id not in groups:
-                groups.append(group_id)
-            elif not enabled and group_id in groups:
-                groups.remove(group_id)
+            groups = [
+                item
+                for item in data["subs"]["sign_groups"]
+                if str(item.get("group_id", "")) != group_id
+            ]
+            if enabled:
+                groups.append({"group_id": group_id, "umo": str(umo)})
+            data["subs"]["sign_groups"] = groups
             self._write(data)

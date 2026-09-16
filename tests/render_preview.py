@@ -25,7 +25,11 @@ PLAYER = {
     "chars": [{"charId": f"c{i}"} for i in range(153)],
     "skins": [{"skinId": f"s{i}"} for i in range(22)],
     "charInfoMap": {
-        "char_1012_skadi2": {"name": "浊心斯卡蒂", "rarity": 5, "profession": "WARRIOR"},
+        "char_1012_skadi2": {
+            "name": "浊心斯卡蒂",
+            "rarity": 5,
+            "profession": "WARRIOR",
+        },
         "char_4009_irene": {"name": "艾丽妮", "rarity": 5, "profession": "WARRIOR"},
         "char_002_amiya": {"name": "阿米娅", "rarity": 4, "profession": "CASTER"},
     },
@@ -34,7 +38,10 @@ PLAYER = {
         {"charId": "char_4009_irene", "level": 80, "evolvePhase": 2},
         {"charId": "char_002_amiya", "level": 50, "evolvePhase": 2},
     ],
-    "routine": {"daily": {"current": 10, "total": 10}, "weekly": {"current": 9, "total": 13}},
+    "routine": {
+        "daily": {"current": 10, "total": 10},
+        "weekly": {"current": 9, "total": 13},
+    },
     "campaign": {"reward": {"current": 1200, "total": 1725}},
 }
 

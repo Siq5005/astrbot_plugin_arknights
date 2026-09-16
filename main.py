@@ -9,11 +9,15 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
+import random
 import time
 from pathlib import Path
 from typing import Any
 
 import qrcode
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.message_components import Image, Plain
@@ -23,7 +27,7 @@ from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 from .core.cards import build_note_context, build_sanity_context
 from .core.hypergryph import HypergryphClient, HypergryphError
 from .core.render import Renderer
-from .core.skland import SklandClient, SklandError
+from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
@@ -121,9 +125,66 @@ class ArknightsPlugin(Star):
         self._base_css: str | None = None
         # uid -> (expiry timestamp, player info payload)
         self._player_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        # user_key -> whether a sanity-full notice has already been sent
+        self._sanity_notified: dict[str, bool] = {}
+        self.scheduler: AsyncIOScheduler | None = None
+
+    async def initialize(self) -> None:
+        """Start the automatic sign-in and sanity polling jobs."""
+        hour, minute = self._parse_sign_time(self.config.get("sign_time", "00:05"))
+        minutes = max(10, int(self.config.get("sanity_poll_interval", 20) or 20))
+        try:
+            self.scheduler = AsyncIOScheduler()
+            self.scheduler.add_job(
+                self._auto_sign_job,
+                CronTrigger(hour=hour, minute=minute),
+                id="arknights_auto_sign",
+                replace_existing=True,
+            )
+            self.scheduler.add_job(
+                self._sanity_poll_job,
+                IntervalTrigger(minutes=minutes),
+                id="arknights_sanity_poll",
+                replace_existing=True,
+            )
+            self.scheduler.start()
+            logger.info(
+                "罗德岛终端定时任务已启动：签到 %02d:%02d，理智轮询每 %d 分钟",
+                hour,
+                minute,
+                minutes,
+            )
+        except Exception as exc:  # noqa: BLE001 - scheduling must not block loading
+            logger.error("启动定时任务失败: %s", exc)
+            self.scheduler = None
+
+    @staticmethod
+    def _parse_sign_time(raw: Any) -> tuple[int, int]:
+        """Parse the configured ``HH:MM`` sign-in time.
+
+        Args:
+            raw: Configured value.
+
+        Returns:
+            Tuple of ``(hour, minute)``, falling back to ``(0, 5)`` when invalid.
+        """
+        try:
+            hour_text, _, minute_text = str(raw or "").partition(":")
+            hour, minute = int(hour_text), int(minute_text)
+        except (TypeError, ValueError):
+            return 0, 5
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            return hour, minute
+        return 0, 5
 
     async def terminate(self) -> None:
         """Release network resources and cancel background tasks."""
+        if self.scheduler is not None:
+            try:
+                self.scheduler.shutdown(wait=False)
+            except Exception as exc:  # noqa: BLE001 - shutdown must not raise
+                logger.debug("关闭定时任务失败: %s", exc)
+            self.scheduler = None
         for task in list(self._qr_tasks):
             task.cancel()
         self._qr_tasks.clear()
@@ -251,6 +312,24 @@ class ArknightsPlugin(Star):
         Returns:
             A user facing error message, or ``None`` on success.
         """
+
+    async def _complete_binding(
+        self, user_key: str, token: str, umo: str = ""
+    ) -> str | None:
+        """Validate a passport token and persist the resulting bindings.
+
+        The token is exercised through the real authorization chain rather than
+        the lightweight account endpoint, so a token that cannot actually read
+        game data is rejected up front.
+
+        Args:
+            user_key: Platform user identifier.
+            token: Hypergryph passport token.
+            umo: Session that initiated the binding, stored for later pushes.
+
+        Returns:
+            A user facing error message, or ``None`` on success.
+        """
         try:
             authorization = await self.skland.get_authorization(token)
             cred = await self.skland.get_credential(authorization)
@@ -271,6 +350,7 @@ class ArknightsPlugin(Star):
             token,
             bindings[0].nickname,
             [binding.to_dict() for binding in bindings],
+            umo=umo,
         )
         suffix = f"（仅保留前 {limit} 个）" if truncated else ""
         return f"绑定成功，共 {len(bindings)} 个明日方舟角色{suffix}。"
@@ -409,7 +489,7 @@ class ArknightsPlugin(Star):
                 except HypergryphError as exc:
                     await self._notify(umo, f"扫码登录失败：{exc}")
                     return
-                result = await self._complete_binding(user_key, token)
+                result = await self._complete_binding(user_key, token, umo)
                 await self._notify(umo, result or "扫码绑定成功。")
                 return
             await self._notify(umo, "二维码已过期，请重新发送 `扫码绑定`。")
@@ -446,7 +526,9 @@ class ArknightsPlugin(Star):
         except HypergryphError as exc:
             yield event.plain_result(f"验证码登录失败：{exc}")
             return
-        result = await self._complete_binding(event.get_sender_id(), token)
+        result = await self._complete_binding(
+            event.get_sender_id(), token, event.unified_msg_origin
+        )
         yield event.plain_result(result or "绑定成功。")
 
     @filter.command("token绑定", alias={"Token绑定", "tok绑定"})
@@ -462,7 +544,9 @@ class ArknightsPlugin(Star):
                 "token 获取方式：登录森空岛后访问 https://web-api.skland.com/account/info/hg"
             )
             return
-        result = await self._complete_binding(event.get_sender_id(), args[0].strip())
+        result = await self._complete_binding(
+            event.get_sender_id(), args[0].strip(), event.unified_msg_origin
+        )
         yield event.plain_result(result or "绑定成功。")
 
     @filter.command("绑定列表")
@@ -667,3 +751,222 @@ class ArknightsPlugin(Star):
             )
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    # ── sign-in and subscriptions ─────────────────────────────────────────
+
+    @staticmethod
+    def _to_binding(entry: dict[str, Any]) -> UserBinding:
+        """Convert a stored binding record back into a ``UserBinding``.
+
+        Args:
+            entry: Stored binding dictionary.
+
+        Returns:
+            The equivalent binding object.
+        """
+        return UserBinding(
+            uid=str(entry.get("uid") or ""),
+            game_id=str(entry.get("game_id") or "1"),
+            nickname=str(entry.get("nick_name") or ""),
+            channel_name=str(entry.get("channel_name") or ""),
+        )
+
+    @staticmethod
+    def _sign_line(binding: dict[str, Any], result: SignInResult) -> str:
+        """Format one sign-in outcome for a notification.
+
+        Args:
+            binding: Stored binding dictionary.
+            result: Sign-in outcome.
+
+        Returns:
+            One line of notification text.
+        """
+        name = str(binding.get("nick_name") or "未知角色")
+        if result.success:
+            awards = "、".join(result.awards) if result.awards else "无"
+            return f"{name}：签到成功（{awards}）"
+        return f"{name}：{result.error}"
+
+    @filter.command("签到")
+    async def do_sign(self, event: AstrMessageEvent):
+        """Run the Skland attendance sign-in for the current role."""
+        resolved = await self._resolve_binding(event)
+        if not resolved:
+            yield event.plain_result(NO_BINDING_TEXT)
+            return
+        user, binding = resolved
+        try:
+            authorization = await self.skland.get_authorization(
+                str(user.get("token") or "")
+            )
+            cred = await self.skland.get_credential(authorization)
+            result = await self.skland.sign_arknights(cred, self._to_binding(binding))
+        except SklandError as exc:
+            yield event.plain_result(await self._report_query_error(event, exc))
+            return
+        if result.success:
+            awards = "、".join(result.awards) if result.awards else "无"
+            yield event.plain_result(f"签到成功，获得：{awards}")
+        elif "已签到" in result.error or "重复" in result.error:
+            yield event.plain_result("今天已经签到过了，无需重复签到。")
+        else:
+            yield event.plain_result(f"签到失败：{result.error}")
+
+    @filter.command("订阅理智")
+    async def subscribe_sanity(self, event: AstrMessageEvent):
+        """Enable sanity-full notifications for the caller."""
+        if not event.is_private_chat():
+            yield event.plain_result("理智提醒通过私聊推送，请在私聊中订阅。")
+            return
+        if not await self.store.get_user(event.get_sender_id()):
+            yield event.plain_result(NO_BINDING_TEXT)
+            return
+        await self.store.set_sanity_sub(
+            event.get_sender_id(), event.unified_msg_origin, True
+        )
+        minutes = max(10, int(self.config.get("sanity_poll_interval", 20) or 20))
+        yield event.plain_result(
+            f"已开启理智回满提醒，每 {minutes} 分钟检查一次。\n"
+            "发送 `取消订阅理智` 可关闭。"
+        )
+
+    @filter.command("取消订阅理智")
+    async def unsubscribe_sanity(self, event: AstrMessageEvent):
+        """Disable sanity-full notifications for the caller."""
+        await self.store.set_sanity_sub(event.get_sender_id(), "", False)
+        yield event.plain_result("已关闭理智回满提醒。")
+
+    @filter.command("订阅签到")
+    async def subscribe_sign(self, event: AstrMessageEvent):
+        """Subscribe the current group to automatic sign-in results."""
+        group_id = event.get_group_id()
+        if not group_id:
+            yield event.plain_result("请在群聊中使用该指令。")
+            return
+        await self.store.set_sign_group(group_id, event.unified_msg_origin, True)
+        yield event.plain_result("已开启本群的自动签到结果通知。")
+
+    @filter.command("取消订阅签到")
+    async def unsubscribe_sign(self, event: AstrMessageEvent):
+        """Unsubscribe the current group from automatic sign-in results."""
+        group_id = event.get_group_id()
+        if not group_id:
+            yield event.plain_result("请在群聊中使用该指令。")
+            return
+        await self.store.set_sign_group(group_id, "", False)
+        yield event.plain_result("已关闭本群的自动签到通知。")
+
+    async def _sign_in_user(
+        self, user_key: str, user: dict[str, Any]
+    ) -> list[tuple[dict[str, Any], SignInResult]]:
+        """Sign in every role of one account.
+
+        Args:
+            user_key: Platform user identifier, used for logging.
+            user: Stored user record.
+
+        Returns:
+            One ``(binding, result)`` pair per role; empty when the stored
+            credential is no longer valid.
+        """
+        try:
+            authorization = await self.skland.get_authorization(
+                str(user.get("token") or "")
+            )
+            cred = await self.skland.get_credential(authorization)
+        except SklandError as exc:
+            logger.warning("[自动签到] %s 凭证失效，跳过: %s", user_key, exc)
+            return []
+        results: list[tuple[dict[str, Any], SignInResult]] = []
+        for binding in user.get("bindings") or []:
+            try:
+                result = await self.skland.sign_arknights(
+                    cred, self._to_binding(binding)
+                )
+            except SklandError as exc:
+                result = SignInResult(
+                    success=False,
+                    nickname=str(binding.get("nick_name") or ""),
+                    error=str(exc),
+                )
+            results.append((binding, result))
+        return results
+
+    async def _auto_sign_job(self) -> None:
+        """Sign in every bound account and deliver a summary.
+
+        Results go to the groups subscribed with ``订阅签到``; when no group is
+        subscribed they are sent privately to each account owner instead.
+        """
+        users = await self.store.all_users()
+        if not users:
+            return
+        groups = await self.store.list_sign_groups()
+        group_lines: list[str] = []
+        private: dict[str, list[str]] = {}
+
+        for user_key, user in users.items():
+            results = await self._sign_in_user(user_key, user)
+            for binding, result in results:
+                line = self._sign_line(binding, result)
+                if groups:
+                    group_lines.append(line)
+                else:
+                    private.setdefault(user_key, []).append(line)
+            # Spread requests out to avoid triggering rate limiting.
+            await asyncio.sleep(3 + random.random() * 3)
+
+        if groups and group_lines:
+            text = "森空岛自动签到结果\n" + "\n".join(group_lines)
+            for group in groups:
+                await self._notify(str(group.get("umo") or ""), text)
+            return
+
+        for user_key, lines in private.items():
+            umo = str((users.get(user_key) or {}).get("umo") or "")
+            if not umo:
+                continue
+            await self._notify(umo, "森空岛自动签到结果\n" + "\n".join(lines))
+
+    async def _sanity_poll_job(self) -> None:
+        """Notify subscribers whose sanity has just reached the cap.
+
+        Each subscriber is notified at most once per fill-up; the flag resets as
+        soon as sanity drops below the cap again.
+        """
+        for sub in await self.store.list_sanity_subs():
+            user_key = str(sub.get("user_key") or "")
+            umo = str(sub.get("umo") or "")
+            user = await self.store.get_user(user_key)
+            if not user or not umo:
+                continue
+            bindings = user.get("bindings") or []
+            binding = next(
+                (
+                    b
+                    for b in bindings
+                    if str(b.get("uid")) == str(user.get("primary_uid"))
+                ),
+                bindings[0] if bindings else None,
+            )
+            if not binding:
+                continue
+            try:
+                data = await self._player_data(user, binding)
+            except SklandError as exc:
+                logger.warning("[理智轮询] %s 查询失败: %s", user_key, exc)
+                continue
+
+            sanity = build_sanity_context(data)
+            if sanity["full"]:
+                if self._sanity_notified.get(user_key):
+                    continue
+                self._sanity_notified[user_key] = True
+                await self._notify(
+                    umo,
+                    f"理智已回满（{sanity['current']} / {sanity['max']}），记得清体力。",
+                )
+            else:
+                self._sanity_notified[user_key] = False
+            await asyncio.sleep(3 + random.random() * 3)

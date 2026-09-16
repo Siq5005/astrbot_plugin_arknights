@@ -65,20 +65,34 @@ async def test_set_primary(tmp_path):
 @pytest.mark.anyio
 async def test_sanity_subscription_toggle(tmp_path):
     store = Store(tmp_path / "users.json")
-    await store.set_sanity_sub("u1", True)
-    assert await store.list_sanity_subs() == ["u1"]
-    await store.set_sanity_sub("u1", True)
-    assert await store.list_sanity_subs() == ["u1"]
-    await store.set_sanity_sub("u1", False)
+    await store.set_sanity_sub("u1", "aiocqhttp:FriendMessage:1", True)
+    assert await store.list_sanity_subs() == [
+        {"user_key": "u1", "umo": "aiocqhttp:FriendMessage:1"}
+    ]
+    # re-enabling replaces rather than duplicating
+    await store.set_sanity_sub("u1", "aiocqhttp:FriendMessage:1", True)
+    assert len(await store.list_sanity_subs()) == 1
+    await store.set_sanity_sub("u1", "", False)
     assert await store.list_sanity_subs() == []
+
+
+@pytest.mark.anyio
+async def test_sanity_subscription_toggle_keeps_other_users(tmp_path):
+    store = Store(tmp_path / "users.json")
+    await store.set_sanity_sub("u1", "umo1", True)
+    await store.set_sanity_sub("u2", "umo2", True)
+    await store.set_sanity_sub("u1", "", False)
+    assert await store.list_sanity_subs() == [{"user_key": "u2", "umo": "umo2"}]
 
 
 @pytest.mark.anyio
 async def test_sign_group_toggle(tmp_path):
     store = Store(tmp_path / "users.json")
-    await store.set_sign_group("g1", True)
-    assert await store.list_sign_groups() == ["g1"]
-    await store.set_sign_group("g1", False)
+    await store.set_sign_group("g1", "aiocqhttp:GroupMessage:1", True)
+    assert await store.list_sign_groups() == [
+        {"group_id": "g1", "umo": "aiocqhttp:GroupMessage:1"}
+    ]
+    await store.set_sign_group("g1", "", False)
     assert await store.list_sign_groups() == []
 
 
@@ -86,9 +100,21 @@ async def test_sign_group_toggle(tmp_path):
 async def test_remove_user_is_cleared_from_subscriptions(tmp_path):
     store = Store(tmp_path / "users.json")
     await store.upsert_auth("u1", "tok", "n", [{"uid": "1", "nick_name": "A"}])
-    await store.set_sanity_sub("u1", True)
+    await store.set_sanity_sub("u1", "umo1", True)
     assert await store.remove_user("u1") is True
     assert await store.list_sanity_subs() == []
+
+
+@pytest.mark.anyio
+async def test_upsert_auth_keeps_umo(tmp_path):
+    store = Store(tmp_path / "users.json")
+    await store.upsert_auth(
+        "u1", "tok", "n", [{"uid": "1", "nick_name": "A"}], umo="umo1"
+    )
+    assert (await store.get_user("u1"))["umo"] == "umo1"
+    # re-binding without a umo keeps the previously captured session
+    await store.upsert_auth("u1", "tok2", "n", [{"uid": "1", "nick_name": "A"}])
+    assert (await store.get_user("u1"))["umo"] == "umo1"
 
 
 @pytest.mark.anyio
