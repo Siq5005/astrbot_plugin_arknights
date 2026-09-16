@@ -151,7 +151,7 @@
       </div>
 
       {% for facility in building.facilities %}
-      <div class="section">
+      <div class="panel">
         <div class="section-title">
           {% if facility.icon %}<img src="{{ facility.icon }}" alt="" />{% endif
           %}{{ facility.name }}
@@ -180,7 +180,7 @@
       </div>
       {% endfor %}
 
-      <div class="section">
+      <div class="panel">
         <div class="section-title">其他</div>
         <div class="row">
           <span class="row-label">线索板</span>
@@ -210,8 +210,8 @@
       </div>
 
       <div class="card-footer">
-        <span>心情上限 {{ building.mood_max }}，按干员心情值换算</span>
-        <span>SNAPSHOT / SKLAND</span>
+        <span>© HYPERGRYPH · 心情上限 {{ building.mood_max }}，按干员心情值换算</span>
+        <span><span class="barcode"></span><span class="serial">RI-INFRA-001</span></span>
       </div>
     </div>
   </body>

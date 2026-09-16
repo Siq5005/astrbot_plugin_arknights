@@ -5,6 +5,7 @@ from core.announce import (
     GROUP_CN,
     AnnounceClient,
     AnnounceError,
+    extract_images,
     html_to_text,
     normalize,
 )
@@ -147,16 +148,54 @@ async def test_focus_id_survives_failure():
     assert await _client(handler).focus_id() == ""
 
 
+def test_extract_images_makes_urls_absolute_and_unique():
+    markup = (
+        '<img src="https://cdn.example/a.jpg"/>'
+        '<img src="https://cdn.example/a.jpg"/>'
+        '<img src="//cdn.example/b.png"/>'
+        '<img src="images/c.png"/>'
+        "<p>no image here</p>"
+    )
+    urls = extract_images(markup, "https://ak.hycdn.cn/staging/x/y.html")
+    assert urls == [
+        "https://cdn.example/a.jpg",
+        "https://cdn.example/b.png",
+        "https://ak.hycdn.cn/staging/x/images/c.png",
+    ]
+
+
+def test_extract_images_handles_empty():
+    assert extract_images("") == []
+    assert extract_images(None) == []
+
+
+def test_extract_images_tolerates_single_quotes_and_extra_attributes():
+    markup = "<img class=\"media-wrap image-wrap\" alt='x' src='https://cdn.example/d.jpg' />"
+    assert extract_images(markup) == ["https://cdn.example/d.jpg"]
+
+
 @pytest.mark.anyio
-async def test_detail_flattens_and_truncates():
+async def test_fetch_detail_returns_text_and_images():
     def handler(request):
-        return httpx.Response(200, text="<p>" + "字" * 2000 + "</p>")
+        return httpx.Response(
+            200,
+            text=(
+                "<p>" + "字" * 2000 + "</p>"
+                '<img src="https://cdn.example/1.jpg"/>'
+                '<img src="https://cdn.example/2.jpg"/>'
+            ),
+        )
 
-    text = await _client(handler).detail("https://example.invalid/a.html", limit=50)
-    assert len(text) == 50
+    detail = await _client(handler).fetch_detail(
+        "https://example.invalid/a.html", text_limit=50, max_images=1
+    )
+    assert len(detail["text"]) == 50
+    # images are capped but the true total is reported
+    assert detail["images"] == ["https://cdn.example/1.jpg"]
+    assert detail["image_total"] == 2
 
 
 @pytest.mark.anyio
-async def test_detail_requires_a_url():
+async def test_fetch_detail_requires_a_url():
     with pytest.raises(AnnounceError):
-        await AnnounceClient().detail("")
+        await AnnounceClient().fetch_detail("")

@@ -56,7 +56,7 @@
         <div class="progress-fill" style="width: {{ sanity.percent }}%"></div>
       </div>
 
-      <div class="section" style="margin-top: 20px">
+      <div class="panel" style="margin-top: 4px">
         <div class="section-title">
           {% if sanity.full %}状态{% else %}距回满{% endif %}
         </div>
@@ -71,8 +71,8 @@
       </div>
 
       <div class="card-footer">
-        <span>数据时间 {{ sanity.data_time }}</span>
-        <span>数值由回满时刻反推，可能有秒级差异</span>
+        <span>© HYPERGRYPH · 数据时间 {{ sanity.data_time }}</span>
+        <span><span class="barcode"></span><span class="serial">RI-SANITY-001</span></span>
       </div>
     </div>
   </body>

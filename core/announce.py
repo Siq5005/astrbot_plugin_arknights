@@ -19,6 +19,7 @@ import logging
 import re
 from datetime import datetime
 from typing import Any
+from urllib.parse import urljoin
 
 import httpx
 
@@ -39,6 +40,7 @@ UNKNOWN_GROUP_CN = "公告"
 _TAG_RE = re.compile(r"<[^>]+>")
 _BLOCK_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.S | re.I)
 _TS_RE = re.compile(r"_(\d{10})\.html?$")
+_IMG_RE = re.compile(r"<img\b[^>]*?\bsrc=[\"']([^\"']+)[\"']", re.I)
 
 
 class AnnounceError(Exception):
@@ -176,15 +178,22 @@ class AnnounceClient:
             return ""
         return str(payload.get("focusAnnounceId") or "")
 
-    async def detail(self, url: str, limit: int = 1200) -> str:
-        """Fetch an announcement page and flatten it to text.
+    async def fetch_detail(
+        self, url: str, text_limit: int = 1200, max_images: int = 6
+    ) -> dict[str, Any]:
+        """Fetch an announcement and return both its text and its artwork.
+
+        Most announcements are little more than a single large image, and
+        flattening the markup to text alone discarded the whole body. The images
+        are therefore returned alongside the text so the caller can send them.
 
         Args:
             url: Announcement page URL.
-            limit: Maximum number of characters to return.
+            text_limit: Maximum characters of flattened text to return.
+            max_images: Maximum number of image URLs to return.
 
         Returns:
-            Plain text, truncated to ``limit`` characters.
+            Mapping with ``text``, ``images`` (capped) and ``image_total``.
 
         Raises:
             AnnounceError: When the page is unreachable.
@@ -197,5 +206,35 @@ class AnnounceClient:
             markup = response.text
         except httpx.HTTPError as exc:
             raise AnnounceError(f"公告正文获取失败: {exc}") from exc
-        text = html_to_text(markup)
-        return text[:limit]
+        images = extract_images(markup, url)
+        return {
+            "text": html_to_text(markup)[:text_limit],
+            "images": images[:max_images],
+            "image_total": len(images),
+        }
+
+
+def extract_images(markup: str, base_url: str = "") -> list[str]:
+    """Collect the image URLs referenced by an announcement page.
+
+    Args:
+        markup: Raw announcement HTML.
+        base_url: Page URL, used to resolve relative sources.
+
+    Returns:
+        Absolute, de-duplicated image URLs in document order.
+    """
+    urls: list[str] = []
+    seen: set[str] = set()
+    for raw in _IMG_RE.findall(str(markup or "")):
+        candidate = raw.strip()
+        if not candidate:
+            continue
+        if candidate.startswith("//"):
+            candidate = "https:" + candidate
+        elif not candidate.startswith("http"):
+            candidate = urljoin(base_url, candidate)
+        if candidate not in seen:
+            seen.add(candidate)
+            urls.append(candidate)
+    return urls

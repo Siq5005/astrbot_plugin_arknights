@@ -442,12 +442,16 @@ async def main() -> int:
     async def fake_focus():
         return "2068"
 
-    async def fake_detail(url, limit=1200):
-        return "公告正文摘要"
+    async def fake_detail(url, text_limit=1200, max_images=6):
+        return {
+            "text": "公告正文摘要",
+            "images": ["https://example.invalid/a.jpg"],
+            "image_total": 1,
+        }
 
     plugin._announce.fetch = fake_announce
     plugin._announce.focus_id = fake_focus
-    plugin._announce.detail = fake_detail
+    plugin._announce.fetch_detail = fake_detail
 
     results = await drive(plugin.show_announcements(StubEvent("/方舟公告")))
     check(
@@ -456,9 +460,14 @@ async def main() -> int:
     )
 
     results = await drive(plugin.show_announcements(StubEvent("/方舟公告 2068")))
+    body_text = results[0][1][0].text if results and results[0][0] == "chain" else ""
     check(
-        "方舟公告 <编号> returns the body",
-        results and "公告正文摘要" in results[0][1] and "2068" in results[0][1],
+        "方舟公告 <编号> returns text and artwork",
+        bool(results)
+        and "公告正文摘要" in body_text
+        and "2068" in body_text
+        and len(results[0][1]) == 2,
+        f"{len(results[0][1]) if results else 0} 个消息段",
     )
 
     results = await drive(plugin.show_announcements(StubEvent("/方舟公告 9999")))

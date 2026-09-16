@@ -1428,15 +1428,35 @@ class ArknightsPlugin(Star):
                 yield event.plain_result(f"没有找到编号为 {wanted} 的公告。")
                 return
             try:
-                body = await self._announce.detail(target["url"])
+                detail = await self._announce.fetch_detail(
+                    target["url"],
+                    max_images=max(
+                        1, int(self.config.get("announce_max_images", 6) or 6)
+                    ),
+                )
             except AnnounceError as exc:
                 yield event.plain_result(f"公告正文获取失败：{exc}")
                 return
-            yield event.plain_result(
+            header = (
                 f"[{target['group_cn']}] {target['title']}\n"
-                f"{target['date_text']}\n"
-                f"编号 {target['id']}\n\n{body}"
+                f"{target['date_text']} · 编号 {target['id']}"
             )
+            # Announcement bodies are mostly artwork, so the images are the
+            # content and the flattened text is only the caption.
+            extra = ""
+            if detail["image_total"] > len(detail["images"]):
+                extra = (
+                    f"\n（共 {detail['image_total']} 张图，仅推送前 "
+                    f"{len(detail['images'])} 张）"
+                )
+            text = header
+            if detail["text"]:
+                text += f"\n\n{detail['text']}"
+            text += extra
+            chain: list[Any] = [Plain(text)]
+            for image_url in detail["images"]:
+                chain.append(Image.fromURL(image_url))
+            yield event.chain_result(chain)
             return
 
         try:
