@@ -1,25 +1,33 @@
 """Integration checks that require the AstrBot framework to be importable.
 
-Run from the AstrBot checkout so that the plugin resolves through the exact
-dotted module path AstrBot uses at runtime::
+Run this from the AstrBot root directory (the one containing ``data/plugins``)
+using the interpreter AstrBot itself runs with, so the plugin resolves through
+the exact dotted module path AstrBot uses at runtime::
 
-    cd /Users/coe/project/AstrBot
-    .venv/bin/python /Users/coe/project/astrbot_plugin_arknights/tests/integration_check.py
+    cd /path/to/AstrBot
+    ASTRBOT_ROOT=$PWD python /path/to/astrbot_plugin_arknights/tests/integration_check.py
 
-This exercises the real command handlers against stubbed network responses, so
-it covers command wiring, card building and image rendering together.
+``ASTRBOT_ROOT`` defaults to the current working directory. This exercises the
+real command handlers against stubbed network responses, so it covers command
+wiring, card building and image rendering together without needing an account.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
-ASTRBOT_ROOT = Path("/Users/coe/project/AstrBot")
+ASTRBOT_ROOT = Path(os.environ.get("ASTRBOT_ROOT") or Path.cwd()).resolve()
+if not (ASTRBOT_ROOT / "data" / "plugins").is_dir():
+    raise SystemExit(
+        f"找不到 AstrBot 根目录（{ASTRBOT_ROOT} 下没有 data/plugins）。\n"
+        "请在 AstrBot 根目录运行本脚本，或设置 ASTRBOT_ROOT 环境变量。"
+    )
 sys.path.insert(0, str(PLUGIN_ROOT))
 sys.path.insert(0, str(ASTRBOT_ROOT))
 
