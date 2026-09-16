@@ -87,6 +87,7 @@ PLAYER = {
     "campaign": {"reward": {"current": 1200, "total": 1725}},
 }
 
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 PLUGIN_NAME = "astrbot_plugin_arknights"
 
 EXPECTED_COMMANDS = {
@@ -286,6 +287,20 @@ async def main() -> int:
         "plugin imports via data.plugins.<name>.main",
         plugin_module.ArknightsPlugin.__name__ == "ArknightsPlugin",
     )
+    import yaml as _yaml
+
+    _meta = _yaml.safe_load((PLUGIN_DIR / "metadata.yaml").read_text(encoding="utf-8"))
+    check(
+        "metadata version matches PLUGIN_VERSION",
+        str(_meta.get("version")) == str(plugin_module.PLUGIN_VERSION),
+        f"metadata {_meta.get('version')} vs code {plugin_module.PLUGIN_VERSION}",
+    )
+    for _field in ("display_name", "desc", "author", "repo"):
+        check(
+            f"metadata has {_field} for the plugin market",
+            bool(str(_meta.get(_field) or "").strip()),
+        )
+
     check(
         "metadata name matches plugin directory",
         plugin_module.PLUGIN_NAME == "astrbot_plugin_arknights",
