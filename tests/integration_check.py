@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -295,6 +296,21 @@ async def main() -> int:
         str(_meta.get("version")) == str(plugin_module.PLUGIN_VERSION),
         f"metadata {_meta.get('version')} vs code {plugin_module.PLUGIN_VERSION}",
     )
+    # The README repeats the version in a badge and in the changelog, and both
+    # went stale when the version was bumped, so they are checked here too.
+    _readme = (PLUGIN_DIR / "README.md").read_text(encoding="utf-8")
+    _badge = re.search(r"badge/version-(\d+\.\d+\.\d+)-", _readme)
+    check(
+        "README badge version matches metadata",
+        _badge is not None and _badge.group(1) == str(_meta.get("version")),
+        f"badge {_badge.group(1) if _badge else '未找到'} vs metadata {_meta.get('version')}",
+    )
+    check(
+        "README changelog has an entry for the current version",
+        f"### {_meta.get('version')} " in _readme,
+        f"缺少 ### {_meta.get('version')} 章节",
+    )
+
     # The author is declared twice — metadata.yaml for the market and @register
     # for the runtime — and they had drifted apart once already.
     from astrbot.core.star.star import star_map as _star_map

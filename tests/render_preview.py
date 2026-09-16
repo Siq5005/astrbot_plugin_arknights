@@ -2,6 +2,7 @@
 
 import ast
 import asyncio
+import re
 import shutil
 import sys
 import time
@@ -211,6 +212,22 @@ PLAYER = {
 }
 
 
+def _plugin_version() -> str:
+    """Read PLUGIN_VERSION straight out of main.py.
+
+    Importing main would pull in astrbot, so the literal is read instead; this
+    keeps the preview cards from advertising a stale version.
+
+    Returns:
+        The plugin version string.
+    """
+    source = (Path(__file__).resolve().parents[1] / "main.py").read_text(
+        encoding="utf-8"
+    )
+    match = re.search(r'^PLUGIN_VERSION = "([^"]+)"', source, re.M)
+    return match.group(1) if match else "0.0.0"
+
+
 def _help_sections() -> list[dict]:
     """Read HELP_SECTIONS straight out of main.py.
 
@@ -377,7 +394,7 @@ async def main() -> None:
     ]
     for template, key, context in cards:
         path = await renderer.render_html(
-            template, {"base_css": base_css, "version": "0.2.0", key: context}
+            template, {"base_css": base_css, "version": _plugin_version(), key: context}
         )
         if path is None:
             print(f"{template} -> 渲染失败")
