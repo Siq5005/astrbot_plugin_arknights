@@ -19,7 +19,20 @@
 
 ### 1.2 明确不在 v1 范围
 
-抽卡记录/分析（P3）、基建/公招/剿灭/肉鸽（P4）、扫码以外的 WebUI 管理页、公告推送、日历、全服统计、抽卡模拟（P5）。架构需为其预留位置，但 v1 不实现。
+抽卡记录/分析（P3）、基建/公招/剿灭/肉鸽（P4）、WebUI 管理页、公告推送、日历、全服统计、抽卡模拟（P5）。架构需为其预留位置，但 v1 不实现。
+
+### 1.3 明确延后的独立项：游戏自动化（MAA / MaaEnd）
+
+自动化控制是一个独立子系统，**不属于 P0–P2，也不在 P3–P5 的排期内**，作为单独的后续立项。调研结论记录如下，避免重复调研：
+
+- 终末地插件的「MaaEnd 远程控制」**并未实现**：`core/client.py` 中 7 个 `/api/maaend/*` 方法在 `main.py` 中引用次数均为 0，`self.maa_mgr` 仅第 954 行赋值后从未使用，README TODO 仍为未勾选状态。协议终端侧提供接口，插件侧未接入。
+- 两条技术路线方向相反：
+  - [astrbot_plugin_maa](https://github.com/Hakuin123/astrbot_plugin_maa)：**反向轮询**。插件用 aiohttp 自建 HTTP 服务（默认 `0.0.0.0:2828`），注册 `POST /maa/getTask` 与 `POST /maa/reportStatus`，MAA 客户端主动来取任务并回报状态。采用 MAA [官方远程控制协议](https://docs.maa.plus/zh-cn/protocol/remote-control-schema.html)，**零外部服务**（依赖仅 `aiohttp`）。要求 MAA 能连到 AstrBot 端口，跨网络需端口映射。
+  - 协议终端的 MaaEnd：**中心化 broker**。MaaEnd 设备出站连接中转，插件调 `/api/maaend/*` 下发任务。免端口映射，但依赖第三方中转与 `api_key`。
+- 明日方舟对应的是 MAA（非 MaaEnd，后者基于 MaaFramework + MXU），已有成熟参考实现，**走官方协议即可零后端**。因此本项目若将来做自动化，无需引入任何服务端。
+- ⚠️ **许可证约束**：[astrbot_plugin_maa](https://github.com/Hakuin123/astrbot_plugin_maa) 为 **AGPL-3.0**。若将来参考或复用其代码，本项目需相应以 AGPL-3.0 发布。立项前必须先定许可证。
+
+v1 的边界：本插件专注**数据查询**，自动化交由上述专门插件，最多在帮助菜单中提供指引。
 
 ---
 
@@ -233,8 +246,9 @@ astrbot_plugin_arknights/
 
 ---
 
-## 12. 待评审确认
+## 12. 已确认决策
 
-1. **是否补充 `token 绑定 <token>` 兜底方式？** 验证码链路是唯一未实测的环节，且终末地插件已将其标注不可用，建议保留这条零风险路径。
-2. 插件展示名定为「罗德岛终端」，仓库名 `astrbot_plugin_arknights`，是否合适？
-3. 指令默认以不带前缀的短名暴露（`便签`/`理智`），同时保证 `ark <子指令>` 等价可用；若你更希望默认只保留 `ark` 命名空间以彻底避免冲突，请说明。
+1. **采纳 `token 绑定 <token>` 兜底方式**。验证码链路是唯一未实测的环节，且终末地插件已将其标注不可用；保留这条零风险路径，成本约 10 行代码。绑定方式因此为三种：扫码、验证码、token。
+2. 插件展示名「罗德岛终端」，仓库名 `astrbot_plugin_arknights`，目录 `/Users/coe/project/astrbot_plugin_arknights`，软链至 `AstrBot/data/plugins/`。
+3. 指令默认以不带前缀的短名暴露（`便签`/`理智`/`签到`/`干员列表` 等），同时保证 `ark <子指令>` 命名空间等价可用。
+4. 游戏自动化（MAA / MaaEnd）作为独立后续项，不在本次范围，详见 §1.3。
