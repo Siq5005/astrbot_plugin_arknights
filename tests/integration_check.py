@@ -108,6 +108,8 @@ EXPECTED_COMMANDS = {
     "方舟肉鸽",
     "方舟任务",
     "方舟公招",
+    "方舟抽卡分析",
+    "方舟抽卡记录",
 }
 
 # Commands registered by astrbot_plugin_endfield that must never be claimed by

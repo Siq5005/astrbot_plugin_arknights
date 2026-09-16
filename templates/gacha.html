@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+      .overview {
+        display: flex;
+        border: 1px solid var(--line);
+        margin-bottom: 20px;
+      }
+      .overview-cell {
+        flex: 1;
+        padding: 10px 14px;
+        border-right: 1px solid var(--line);
+      }
+      .overview-cell:last-child {
+        border-right: none;
+      }
+      .overview-key {
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 1.3px;
+      }
+      .overview-val {
+        font-size: 22px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .overview-val small {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .overview-val.hot {
+        color: var(--accent);
+      }
+      .dist-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 7px 2px;
+      }
+      .dist-stars {
+        width: 74px;
+        font-size: 13px;
+        color: var(--accent);
+        letter-spacing: -1px;
+        flex: none;
+      }
+      .dist-bar {
+        flex: 1;
+        height: 8px;
+        background: #1d2027;
+      }
+      .dist-bar div {
+        height: 100%;
+        background: var(--accent);
+      }
+      .dist-bar.dim div {
+        background: #6b5426;
+      }
+      .dist-count {
+        width: 96px;
+        text-align: right;
+        font-size: 13px;
+        flex: none;
+      }
+      .dist-count span {
+        color: var(--muted);
+      }
+      .six-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 2px;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 14px;
+      }
+      .six-row:last-child {
+        border-bottom: none;
+      }
+      .six-name {
+        flex: 1;
+        font-weight: 600;
+      }
+      .six-pool {
+        font-size: 11px;
+        color: var(--muted);
+        margin-left: 8px;
+        font-weight: 400;
+      }
+      .six-pulls {
+        width: 62px;
+        text-align: right;
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .tag {
+        flex: none;
+        font-size: 10px;
+        letter-spacing: 1px;
+        padding: 1px 6px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .tag.up {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .tag.off {
+        border-color: var(--danger);
+        color: var(--danger);
+      }
+      .pool-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 8px 2px;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 13.5px;
+      }
+      .pool-row:last-child {
+        border-bottom: none;
+      }
+      .pool-name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pool-stat {
+        color: var(--label);
+        flex: none;
+      }
+      .pool-stat b {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">抽卡分析</div>
+        <div class="card-subtitle">Headhunting</div>
+      </div>
+      <div class="stripes"></div>
+
+      <div class="overview">
+        <div class="overview-cell">
+          <div class="overview-key">总抽数</div>
+          <div class="overview-val">{{ gacha.total }}</div>
+        </div>
+        <div class="overview-cell">
+          <div class="overview-key">六星</div>
+          <div class="overview-val hot">{{ gacha.six_total }}</div>
+        </div>
+        <div class="overview-cell">
+          <div class="overview-key">平均出六</div>
+          <div class="overview-val">
+            {{ gacha.avg_six }}<small> 抽</small>
+          </div>
+        </div>
+        <div class="overview-cell">
+          <div class="overview-key">当前保底</div>
+          <div class="overview-val">
+            {{ gacha.pity }}<small> 抽</small>
+          </div>
+        </div>
+        {% if gacha.up_known %}
+        <div class="overview-cell">
+          <div class="overview-key">UP / 歪</div>
+          <div class="overview-val">
+            {{ gacha.up_hits }}<small> / {{ gacha.off_rate }}</small>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="section">
+        <div class="section-title">稀有度分布</div>
+        {% for stars in [6, 5, 4, 3] %}
+        {% set count = gacha.counts[stars] %}
+        <div class="dist-row">
+          <span class="dist-stars">{{ "★" * stars }}</span>
+          <span class="dist-bar {% if stars < 6 %}dim{% endif %}">
+            <div style="width: {{ (count * 100 // gacha.total) if gacha.total else 0 }}%"></div>
+          </span>
+          <span class="dist-count">
+            {{ count }}<span>
+              · {{ (count * 1000 // gacha.total / 10) if gacha.total else 0 }}%</span
+            >
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          六星记录（共 {{ gacha.six_stars_total }} 次，显示最近 {{ gacha.six_stars | length }} 次）
+        </div>
+        {% if gacha.six_stars %}
+        {% for item in gacha.six_stars %}
+        <div class="six-row">
+          {% if item.is_up is sameas true %}
+          <span class="tag up">UP</span>
+          {% elif item.is_up is sameas false %}
+          <span class="tag off">歪</span>
+          {% else %}
+          <span class="tag">六星</span>
+          {% endif %}
+          <span class="six-name">
+            {{ item.name }}
+            <span class="six-pool">
+              {{ item.pool_name }}{% if item.time_text %} · {{ item.time_text }}{% endif %}
+            </span>
+          </span>
+          <span class="six-pulls">{{ item.pulls }} 抽</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty">还没有六星记录</div>
+        {% endif %}
+      </div>
+
+      <div class="section">
+        <div class="section-title">卡池分布</div>
+        {% for pool in gacha.pools[:10] %}
+        <div class="pool-row">
+          <span class="pool-name">{{ pool.name }}</span>
+          <span class="pool-stat">
+            {{ pool.count }} 抽 · <b>{{ pool.six }}</b> 六星 · {{ pool.five }} 五星
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="card-footer">
+        <span>保底为该六星之后已抽次数；UP 判定依赖卡池表，缺失时不计入</span>
+        <span>DATA SOURCE / AK.HYPERGRYPH</span>
+      </div>
+    </div>
+  </body>
+</html>

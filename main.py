@@ -32,6 +32,8 @@ from .core.daily import (
     build_rogue_context,
     build_task_context,
 )
+from .core.gacha import GachaClient, GachaError, analyze, format_record_time
+from .core.gamedata import GameData
 from .core.hypergryph import HypergryphClient, HypergryphError
 from .core.operators import (
     build_operator_context,
@@ -91,6 +93,10 @@ HELP_TEXT = """罗德岛终端 · 明日方舟助手
 方舟任务              每日/每周任务与周常奖励
 方舟公招              公开招募栏位状态
 
+【抽卡】
+方舟抽卡分析          六星统计、保底与 UP 判定
+方舟抽卡记录          最近的抽卡记录
+
 【签到与提醒】
 方舟签到              手动执行森空岛签到
 方舟订阅理智 / 方舟取消订阅理智  理智回满推送
@@ -130,6 +136,13 @@ HELP_SECTIONS = [
         ],
     },
     {
+        "title": "抽卡",
+        "items": [
+            {"cmd": "方舟抽卡分析", "desc": "六星统计、保底与 UP 判定"},
+            {"cmd": "方舟抽卡记录", "desc": "最近的抽卡记录"},
+        ],
+    },
+    {
         "title": "签到与提醒",
         "items": [
             {"cmd": "方舟签到", "desc": "手动执行森空岛签到"},
@@ -162,6 +175,10 @@ class ArknightsPlugin(Star):
         self._base_css: str | None = None
         # uid -> (expiry timestamp, player info payload)
         self._player_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._gamedata = GameData(
+            Path(get_astrbot_plugin_data_path()) / PLUGIN_NAME / "gamedata"
+        )
+        self._gacha = GachaClient()
         # user_key -> whether a sanity-full notice has already been sent
         self._sanity_notified: dict[str, bool] = {}
         self.scheduler: AsyncIOScheduler | None = None
@@ -230,6 +247,8 @@ class ArknightsPlugin(Star):
             self._renderer = None
         await self.skland.close()
         await self.hypergryph.close()
+        await self._gamedata.close()
+        await self._gacha.close()
 
     # ── helpers ───────────────────────────────────────────────────────────
 
@@ -1228,3 +1247,107 @@ class ArknightsPlugin(Star):
             )
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    # ── headhunting ───────────────────────────────────────────────────────
+
+    async def _gacha_records(self, event: AstrMessageEvent):
+        """Fetch headhunting records for the caller's primary role.
+
+        Args:
+            event: Incoming message event.
+
+        Returns:
+            Tuple of records, player data and an error message. Records are
+            empty when an error message is present.
+        """
+        resolved = await self._resolve_binding(event)
+        if not resolved:
+            return [], {}, NO_BINDING_TEXT
+        user, binding = resolved
+        uid = str(binding.get("uid") or "")
+        token = str(user.get("token") or "")
+        try:
+            await self._gamedata.ensure()
+            records = await self._gacha.fetch_records(token, uid)
+        except GachaError as exc:
+            return [], {}, f"抽卡记录获取失败：{exc}"
+        except Exception as exc:  # noqa: BLE001 - surface any chain failure
+            logger.error("抽卡记录获取异常: %s", exc)
+            return [], {}, f"抽卡记录获取失败：{exc}"
+        try:
+            player = await self._player_data(user, binding)
+        except SklandError:
+            player = {}
+        return records, player, None
+
+    @filter.command("方舟抽卡分析")
+    async def show_gacha(self, event: AstrMessageEvent):
+        """Show the headhunting analysis card."""
+        records, player, error = await self._gacha_records(event)
+        if error:
+            yield event.plain_result(error)
+            return
+        if not records:
+            yield event.plain_result(
+                "没有获取到抽卡记录。\n"
+                "可能原因：该账号从未在官网同步过抽卡记录，或该角色没有抽卡数据。"
+            )
+            return
+        context = analyze(records, self._gamedata, player.get("charInfoMap") or {})
+        image = await self._render("gacha.html", {"gacha": context})
+        if image is None:
+            yield event.plain_result(self._gacha_text(context))
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    @staticmethod
+    def _gacha_text(context: dict[str, Any]) -> str:
+        """Build the plain text fallback for the gacha card.
+
+        Args:
+            context: Context produced by ``analyze``.
+
+        Returns:
+            Multi-line summary text.
+        """
+        lines = [
+            f"总抽数 {context['total']} · 六星 {context['six_total']} "
+            f"· 五星 {context['five_total']}",
+            f"平均出六 {context['avg_six']} 抽 · 当前保底 {context['pity']} 抽",
+        ]
+        if context["up_known"]:
+            lines.append(f"UP {context['up_hits']} 次 · 歪 {context['off_rate']} 次")
+        lines.append(
+            "稀有度："
+            + "、".join(
+                f"{stars}★ {context['counts'][stars]}" for stars in (6, 5, 4, 3)
+            )
+        )
+        for item in context["six_stars"]:
+            lines.append(f"{item['name']}（{item['pulls']} 抽，{item['pool_name']}）")
+        return "\n".join(lines)
+
+    @filter.command("方舟抽卡记录")
+    async def show_gacha_records(self, event: AstrMessageEvent):
+        """List the most recent headhunting records as text."""
+        records, player, error = await self._gacha_records(event)
+        if error:
+            yield event.plain_result(error)
+            return
+        if not records:
+            yield event.plain_result("没有获取到抽卡记录。")
+            return
+        char_info = player.get("charInfoMap") or {}
+        lines = [f"最近 {min(len(records), 15)} 条抽卡记录（共 {len(records)} 条）："]
+        for record in records[:15]:
+            stars = max(3, min(6, int(record.get("rarity") or 2) + 1))
+            char_id = str(record.get("charId") or "")
+            name = str(record.get("charName") or "") or str(
+                (char_info.get(char_id) or {}).get("name") or char_id
+            )
+            pool = self._gamedata.pool_name(str(record.get("poolId") or ""))
+            stamp = format_record_time(record.get("gachaTs"))
+            lines.append(
+                f"{'★' * stars} {name} · {pool}" + (f" · {stamp}" if stamp else "")
+            )
+        yield event.plain_result("\n".join(lines))
