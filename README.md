@@ -187,39 +187,91 @@ astrbot_plugin_arknights/
 
 ## 📸 功能预览
 
-> 以下均为插件**实际渲染输出**，非设计稿，数据来自测试账号。
-> 图片按 1800px 原生分辨率存放（即 2 倍 DPI 渲染结果），点击可查看原图细节。
+> 以下均为插件**实际渲染输出**，非设计稿；数据来自测试账号。
+>
+> 卡片原生宽度约 **900px**，这里按 **900px 显示**（1:1），因此文字大小与机器人发到群里的观感一致；
+> 图片文件本身是 **1800px**（2 倍 DPI 渲染结果），在高分屏上依然锐利，点击可查看原图。
 
-<details open>
-<summary>点击展开全部预览图</summary>
+<details>
+<summary>点击展开全部 13 张预览图</summary>
 
-| `ark帮助` | `ark便签` |
-|:---:|:---:|
-| <img src="docs/preview/help.jpg" width="470"> | <img src="docs/preview/note.jpg" width="470"> |
+**`ark帮助`**
 
-| `ark理智` | `ark干员 <名称>` |
-|:---:|:---:|
-| <img src="docs/preview/sanity.jpg" width="470"> | <img src="docs/preview/operator.jpg" width="470"> |
+<sub>指令总览</sub>
 
-| `ark干员列表` | `ark基建` |
-|:---:|:---:|
-| <img src="docs/preview/operator-list.jpg" width="470"> | <img src="docs/preview/building.jpg" width="470"> |
+<img src="docs/preview/help.jpg" width="900">
 
-| `ark剿灭` | `ark肉鸽` |
-|:---:|:---:|
-| <img src="docs/preview/campaign.jpg" width="470"> | <img src="docs/preview/rogue.jpg" width="470"> |
+**`ark便签`**
 
-| `ark任务` | `ark公招` |
-|:---:|:---:|
-| <img src="docs/preview/task.jpg" width="470"> | <img src="docs/preview/recruit.jpg" width="470"> |
+<sub>账号总览</sub>
 
-| `ark抽卡分析` | `ark公告` |
-|:---:|:---:|
-| <img src="docs/preview/gacha.jpg" width="470"> | <img src="docs/preview/announce.jpg" width="470"> |
+<img src="docs/preview/note.jpg" width="900">
 
-| `ark公告 <编号>` |
-|:---:|
-| <img src="docs/preview/announce-detail.jpg" width="430"> |
+**`ark理智`**
+
+<sub>理智与回满时间</sub>
+
+<img src="docs/preview/sanity.jpg" width="900">
+
+**`ark干员 &lt;名称&gt;`**
+
+<sub>干员详情</sub>
+
+<img src="docs/preview/operator.jpg" width="900">
+
+**`ark干员列表`**
+
+<sub>持有干员图鉴</sub>
+
+<img src="docs/preview/operator-list.jpg" width="900">
+
+**`ark基建`**
+
+<sub>基建设施与干员心情</sub>
+
+<img src="docs/preview/building.jpg" width="900">
+
+**`ark剿灭`**
+
+<sub>剿灭作战与本周合成玉</sub>
+
+<img src="docs/preview/campaign.jpg" width="900">
+
+**`ark肉鸽`**
+
+<sub>集成战略收藏品与投资</sub>
+
+<img src="docs/preview/rogue.jpg" width="900">
+
+**`ark任务`**
+
+<sub>每日 / 每周任务</sub>
+
+<img src="docs/preview/task.jpg" width="900">
+
+**`ark公招`**
+
+<sub>公开招募栏位</sub>
+
+<img src="docs/preview/recruit.jpg" width="900">
+
+**`ark抽卡分析`**
+
+<sub>六星统计、保底与 UP 判定</sub>
+
+<img src="docs/preview/gacha.jpg" width="900">
+
+**`ark公告`**
+
+<sub>官方公告列表</sub>
+
+<img src="docs/preview/announce.jpg" width="900">
+
+**`ark公告 &lt;编号&gt;`**
+
+<sub>公告详情（保留官方排版与配图）</sub>
+
+<img src="docs/preview/announce-detail.jpg" width="900">
 
 </details>
 
