@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+      .sanity-value {
+        font-size: 64px;
+        font-weight: 700;
+        line-height: 1;
+        color: #8fb4ff;
+      }
+      .sanity-max {
+        font-size: 20px;
+        color: #6c7690;
+      }
+      .sanity-row {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">理智</div>
+        <div class="card-subtitle">{{ sanity.nickname or "未知博士" }}</div>
+      </div>
+
+      <div class="section">
+        <div class="sanity-row">
+          <span class="sanity-value">{{ sanity.current }}</span>
+          <span class="sanity-max">/ {{ sanity.max }}</span>
+        </div>
+        <div class="progress">
+          <div class="progress-fill" style="width: {{ sanity.percent }}%"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="row">
+          <span class="row-label">
+            {% if sanity.full %}状态{% else %}距回满{% endif %}
+          </span>
+          <span class="row-value">{{ sanity.remaining_text }}</span>
+        </div>
+        <div class="row">
+          <span class="row-label">恢复速率</span>
+          <span class="row-value">{{ sanity.recovery_minutes }} 分钟 / 点</span>
+        </div>
+      </div>
+
+      <div class="card-footer">
+        <span>数据时间：{{ sanity.data_time }}</span>
+        <span>数值由回满时刻反推，可能与游戏内存在秒级差异</span>
+      </div>
+    </div>
+  </body>
+</html>

@@ -20,6 +20,7 @@ from astrbot.api.message_components import Image, Plain
 from astrbot.api.star import Context, Star, register
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
+from .core.cards import build_note_context, build_sanity_context
 from .core.hypergryph import HypergryphClient, HypergryphError
 from .core.render import Renderer
 from .core.skland import SklandClient, SklandError
@@ -31,6 +32,13 @@ PLUGIN_VERSION = "0.1.0"
 # Seconds the QR code stays valid, and how often it is polled.
 QR_TIMEOUT = 120
 QR_POLL_INTERVAL = 2
+
+NO_BINDING_TEXT = (
+    "你还没有绑定账号。可私聊发送 `扫码绑定` 或 `token绑定 <token>` 开始绑定。"
+)
+
+# Substrings that indicate the stored passport token is no longer usable.
+AUTH_ERROR_MARKERS = ("未登录", "失效", "过期", "unauthorized", "401", "403")
 
 HELP_TEXT = """罗德岛终端 · 明日方舟助手
 
@@ -111,6 +119,8 @@ class ArknightsPlugin(Star):
         self._templates_dir = Path(__file__).parent / "templates"
         self._renderer: Renderer | None = None
         self._base_css: str | None = None
+        # uid -> (expiry timestamp, player info payload)
+        self._player_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
     async def terminate(self) -> None:
         """Release network resources and cancel background tasks."""
@@ -534,3 +544,126 @@ class ArknightsPlugin(Star):
         except (TypeError, ValueError):
             return None
         return value - 1 if value >= 1 else None
+
+    # ── data queries ──────────────────────────────────────────────────────
+
+    async def _player_data(
+        self, user: dict[str, Any], binding: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Fetch the in-game snapshot for a role, reusing a short lived cache.
+
+        Args:
+            user: Stored user record holding the passport token.
+            binding: Binding entry identifying the role.
+
+        Returns:
+            The ``data`` section of the player info response.
+
+        Raises:
+            SklandError: When the credential is rejected or the request fails.
+        """
+        uid = str(binding.get("uid") or "")
+        ttl = int(self.config.get("data_ttl", 300) or 300)
+        now = time.time()
+        cached = self._player_cache.get(uid)
+        if cached and cached[0] > now:
+            return cached[1]
+        authorization = await self.skland.get_authorization(
+            str(user.get("token") or "")
+        )
+        cred = await self.skland.get_credential(authorization)
+        data = await self.skland.get_player_info(cred, uid)
+        self._player_cache[uid] = (now + ttl, data)
+        return data
+
+    async def _report_query_error(self, event: AstrMessageEvent, exc: Exception) -> str:
+        """Turn a query failure into a user facing message.
+
+        An expired credential is treated as a terminal state: the binding is
+        removed so the user is asked to re-authenticate instead of hitting the
+        same error forever.
+
+        Args:
+            event: Incoming message event identifying the caller.
+            exc: The raised error.
+
+        Returns:
+            Message text to send back.
+        """
+        text = str(exc)
+        if any(marker in text for marker in AUTH_ERROR_MARKERS):
+            await self.store.remove_user(event.get_sender_id())
+            return (
+                "账号凭证已失效，已清除你的绑定。"
+                "请重新发送 `扫码绑定` 或 `token绑定 <token>`。"
+            )
+        return f"查询失败：{text}"
+
+    @filter.command("便签")
+    async def show_note(self, event: AstrMessageEvent):
+        """Show the account overview card."""
+        resolved = await self._resolve_binding(event)
+        if not resolved:
+            yield event.plain_result(NO_BINDING_TEXT)
+            return
+        user, binding = resolved
+        try:
+            data = await self._player_data(user, binding)
+        except SklandError as exc:
+            yield event.plain_result(await self._report_query_error(event, exc))
+            return
+        note = build_note_context(data)
+        image = await self._render("note.html", {"note": note})
+        if image is None:
+            yield event.plain_result(self._note_text(note))
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    @staticmethod
+    def _note_text(note: dict[str, Any]) -> str:
+        """Build the plain text fallback for the note card.
+
+        Args:
+            note: Context produced by ``build_note_context``.
+
+        Returns:
+            Multi-line summary text.
+        """
+        return "\n".join(
+            [
+                f"{note['nickname'] or '未知博士'} · 等级 {note['level']}",
+                f"入职日期：{note['register_date']}",
+                f"主线进度：{note['main_stage']}",
+                f"干员 / 时装：{note['char_count']} / {note['skin_count']}",
+                f"理智：{note['sanity']['current']} / {note['sanity']['max']}"
+                f"（{note['sanity']['remaining_text']}）",
+                f"每日任务：{note['daily']['current']} / {note['daily']['total']}",
+                f"每周任务：{note['weekly']['current']} / {note['weekly']['total']}",
+                f"剿灭合成玉：{note['campaign']['current']} / {note['campaign']['total']}",
+                f"数据时间：{note['data_time']}",
+            ]
+        )
+
+    @filter.command("理智")
+    async def show_sanity(self, event: AstrMessageEvent):
+        """Show the sanity card."""
+        resolved = await self._resolve_binding(event)
+        if not resolved:
+            yield event.plain_result(NO_BINDING_TEXT)
+            return
+        user, binding = resolved
+        try:
+            data = await self._player_data(user, binding)
+        except SklandError as exc:
+            yield event.plain_result(await self._report_query_error(event, exc))
+            return
+        sanity = build_sanity_context(data)
+        image = await self._render("sanity.html", {"sanity": sanity})
+        if image is None:
+            yield event.plain_result(
+                f"理智：{sanity['current']} / {sanity['max']}"
+                f"（{sanity['remaining_text']}）\n"
+                f"数据时间：{sanity['data_time']}"
+            )
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])

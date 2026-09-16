@@ -3,3 +3,5 @@ __pycache__/
 .venv/
 .cache/
 node_modules/
+.ruff_cache/
+.pytest_cache/

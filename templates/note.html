@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">{{ note.nickname or "未知博士" }}</div>
+        <div class="card-subtitle">等级 {{ note.level }}</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">档案</div>
+        <div class="row">
+          <span class="row-label">入职日期</span>
+          <span class="row-value">{{ note.register_date }}</span>
+        </div>
+        <div class="row">
+          <span class="row-label">主线进度</span>
+          <span class="row-value">{{ note.main_stage }}</span>
+        </div>
+        <div class="row">
+          <span class="row-label">干员 / 时装</span>
+          <span class="row-value">{{ note.char_count }} / {{ note.skin_count }}</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">理智</div>
+        <div class="row">
+          <span class="row-label">当前</span>
+          <span class="row-value">{{ note.sanity.current }} / {{ note.sanity.max }}</span>
+        </div>
+        <div class="progress">
+          <div class="progress-fill" style="width: {{ note.sanity.percent }}%"></div>
+        </div>
+        <div class="row">
+          <span class="row-label">恢复</span>
+          <span class="row-value">{{ note.sanity.remaining_text }}</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">进度</div>
+        {% for item in [{"label": "每日任务", "node": note.daily},
+                        {"label": "每周任务", "node": note.weekly},
+                        {"label": "剿灭合成玉", "node": note.campaign}] %}
+        <div class="row">
+          <span class="row-label">{{ item.label }}</span>
+          <span class="row-value">{{ item.node.current }} / {{ item.node.total }}</span>
+        </div>
+        <div class="progress">
+          <div class="progress-fill" style="width: {{ item.node.percent }}%"></div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="section">
+        <div class="section-title">助战干员</div>
+        {% if note.assist %}
+        <div class="grid">
+          {% for op in note.assist %}
+          <div class="tile">
+            <img src="{{ op.avatar }}" alt="{{ op.name }}" />
+            <div class="name">{{ op.name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty">未设置助战干员</div>
+        {% endif %}
+      </div>
+
+      <div class="card-footer">
+        <span>数据时间：{{ note.data_time }}</span>
+        <span>数据来源：森空岛（上次同步快照）</span>
+      </div>
+    </div>
+  </body>
+</html>
