@@ -308,7 +308,7 @@ ANNOUNCE_BODY = (
     "<p>一、「逐影集趣」限时活动开启</p>"
     "<p>关卡开放时间：<strong>09月20日 16:00 - 09月30日 03:59</strong></p>"
     "<p>解锁条件：通关主线 1-10</p>"
-    '<img src="https://web.hycdn.cn/upload/image/20260828/'
+    '<img src="https://web.hycdn.cn/upload/image/20260911/'
     '7f5081bb4aac74faa0185f634d07762d.JPG">'
     "<p>活动说明：活动期间将开放「逐影集趣」限时活动，玩家可通过活动关卡作战"
     "获取「摄影记录」，提升「逐影集趣」等级获取相应活动奖励。</p>"
