@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+      .task-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-bottom: 6px;
+      }
+      .task-box {
+        border: 1px solid var(--line);
+        padding: 13px 15px;
+      }
+      .task-key {
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 1.4px;
+      }
+      .task-val {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+        margin: 6px 0 9px;
+      }
+      .task-val b {
+        font-size: 27px;
+        font-weight: 700;
+      }
+      .task-val span {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .task-box.done b {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">任务进度</div>
+        <div class="card-subtitle">Routine &amp; Rewards</div>
+      </div>
+      <div class="stripes"></div>
+
+      <div class="section">
+        <div class="section-title">日常</div>
+        <div class="task-grid">
+          {% for box in [{"key": "每日任务", "node": task.daily},
+                         {"key": "每周任务", "node": task.weekly}] %}
+          <div class="task-box {% if box.node.percent >= 100 %}done{% endif %}">
+            <div class="task-key">{{ box.key }}</div>
+            <div class="task-val">
+              <b>{{ box.node.current }}</b>
+              <span>/ {{ box.node.total }}</span>
+            </div>
+            <div class="progress" style="margin: 0">
+              <div class="progress-fill" style="width: {{ box.node.percent }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">周常奖励</div>
+        <div class="task-grid">
+          {% for box in [{"key": "剿灭合成玉", "node": task.campaign},
+                         {"key": "保全派驻 · 数据增补仪", "node": task.tower_lower}] %}
+          <div class="task-box {% if box.node.percent >= 100 %}done{% endif %}">
+            <div class="task-key">{{ box.key }}</div>
+            <div class="task-val">
+              <b>{{ box.node.current }}</b>
+              <span>/ {{ box.node.total }}</span>
+            </div>
+            <div class="progress" style="margin: 0">
+              <div class="progress-fill" style="width: {{ box.node.percent }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">保全派驻</div>
+        <div class="row">
+          <span class="row-label">数据增补条</span>
+          <span class="row-value">
+            {{ task.tower_higher.current }} / {{ task.tower_higher.total }}
+          </span>
+        </div>
+        <div class="progress">
+          <div class="progress-fill" style="width: {{ task.tower_higher.percent }}%"></div>
+        </div>
+        <div class="row" style="border-bottom: none">
+          <span class="row-label">结算时间</span>
+          <span class="row-value">{{ task.tower_term }}</span>
+        </div>
+      </div>
+
+      <div class="card-footer">
+        <span>进度为上次同步快照，游戏内刷新后请重新查询</span>
+        <span>SNAPSHOT / SKLAND</span>
+      </div>
+    </div>
+  </body>
+</html>

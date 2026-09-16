@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+      .overview {
+        display: flex;
+        border: 1px solid var(--line);
+        margin-bottom: 20px;
+      }
+      .overview-cell {
+        flex: 1;
+        padding: 10px 14px;
+        border-right: 1px solid var(--line);
+      }
+      .overview-cell:last-child {
+        border-right: none;
+      }
+      .overview-key {
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 1.3px;
+      }
+      .overview-val {
+        font-size: 19px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .overview-val small {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .slot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line-soft);
+      }
+      .slot:last-child {
+        border-bottom: none;
+      }
+      .slot-level {
+        flex: none;
+        width: 52px;
+        font-size: 11px;
+        letter-spacing: 1px;
+        color: var(--accent);
+        border: 1px solid var(--line);
+        text-align: center;
+        padding: 3px 0;
+      }
+      .slot-ops {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        flex: 1;
+      }
+      .op {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        width: 158px;
+      }
+      .op img {
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--line);
+        flex: none;
+      }
+      .op-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .op-name {
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .op-mood {
+        height: 4px;
+        background: #1d2027;
+        margin-top: 4px;
+      }
+      .op-mood div {
+        height: 100%;
+        background: var(--accent);
+      }
+      .op-mood.low div {
+        background: var(--danger);
+      }
+      .clue-list {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .clue {
+        font-size: 11px;
+        border: 1px solid var(--line);
+        color: var(--label);
+        padding: 2px 8px;
+      }
+      .clue.held {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">基建</div>
+        <div class="card-subtitle">Infrastructure</div>
+      </div>
+      <div class="stripes"></div>
+
+      <div class="overview">
+        <div class="overview-cell">
+          <div class="overview-key">无人机</div>
+          <div class="overview-val">
+            {{ building.labor.value }}<small> / {{ building.labor.max }}</small>
+          </div>
+        </div>
+        <div class="overview-cell">
+          <div class="overview-key">线索持有</div>
+          <div class="overview-val">
+            {{ building.clue.own }}<small> 已收 {{ building.clue.received }}</small>
+          </div>
+        </div>
+        <div class="overview-cell">
+          <div class="overview-key">每日线索奖励</div>
+          <div class="overview-val">
+            {% if building.clue.daily_reward %}已领取{% else %}未领取{% endif %}
+          </div>
+        </div>
+        <div class="overview-cell">
+          <div class="overview-key">线索交流</div>
+          <div class="overview-val">
+            {% if building.clue.sharing %}进行中{% else %}未开启{% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% for facility in building.facilities %}
+      <div class="section">
+        <div class="section-title">{{ facility.name }}</div>
+        {% for slot in facility.slots %}
+        <div class="slot">
+          <div class="slot-level">Lv.{{ slot.level }}</div>
+          <div class="slot-ops">
+            {% for op in slot.operators %}
+            <div class="op">
+              <img src="{{ op.avatar }}" alt="{{ op.name }}" />
+              <div class="op-body">
+                <div class="op-name">{{ op.name }}</div>
+                <div class="op-mood {% if op.mood_percent < 35 %}low{% endif %}">
+                  <div style="width: {{ op.mood_percent }}%"></div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+            {% if not slot.operators %}
+            <div class="empty" style="padding: 4px 0">空闲</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+
+      <div class="section">
+        <div class="section-title">其他</div>
+        <div class="row">
+          <span class="row-label">线索板</span>
+          <span class="clue-list">
+            {% for item in building.clue.board %}
+            <span class="clue held">{{ item }}</span>
+            {% endfor %}
+            {% if not building.clue.board %}
+            <span class="row-value" style="color: var(--muted)">无</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="row">
+          <span class="row-label">办公室刷新次数</span>
+          <span class="row-value">{{ building.hire.refresh }}</span>
+        </div>
+        <div class="row">
+          <span class="row-label">训练室</span>
+          <span class="row-value">
+            {% if building.training.trainee %}
+            {{ building.training.trainee }} ← {{ building.training.trainer }}
+            {% else %}
+            空闲
+            {% endif %}
+          </span>
+        </div>
+      </div>
+
+      <div class="card-footer">
+        <span>心情上限 {{ building.mood_max }}，按干员心情值换算</span>
+        <span>SNAPSHOT / SKLAND</span>
+      </div>
+    </div>
+  </body>
+</html>

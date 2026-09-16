@@ -8,6 +8,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core.cards import build_note_context, build_sanity_context  # noqa: E402
+from core.daily import (  # noqa: E402
+    build_building_context,
+    build_campaign_context,
+    build_recruit_context,
+    build_rogue_context,
+    build_task_context,
+)
 from core.operators import (  # noqa: E402
     build_operator_context,
     build_roster_context,
@@ -79,7 +86,121 @@ PLAYER = {
         "daily": {"current": 10, "total": 10},
         "weekly": {"current": 9, "total": 13},
     },
-    "campaign": {"reward": {"current": 1200, "total": 1725}},
+    "campaign": {
+        "reward": {"current": 1200, "total": 1725},
+        "records": [
+            {"campaignId": "camp_01", "maxKills": 400},
+            {"campaignId": "camp_02", "maxKills": 271},
+            {"campaignId": "camp_r_05", "maxKills": 400},
+            {"campaignId": "camp_r_07", "maxKills": 288},
+        ],
+    },
+    "campaignInfoMap": {
+        "camp_01": {"name": "切尔诺伯格", "campaignZoneId": "camp_zone_3"},
+        "camp_02": {"name": "龙门外环", "campaignZoneId": "camp_zone_1"},
+        "camp_r_05": {"name": "潮汐作战", "campaignZoneId": "camp_zone_10"},
+        "camp_r_07": {"name": "风蚀高地", "campaignZoneId": "camp_zone_10"},
+    },
+    "campaignZoneInfoMap": {
+        "camp_zone_3": {"name": "乌萨斯"},
+        "camp_zone_1": {"name": "炎国龙门"},
+        "camp_zone_10": {"name": "维多利亚"},
+    },
+    "rogue": {
+        "records": [
+            {
+                "rogueId": "rogue_1",
+                "relicCnt": 86,
+                "bank": {"current": 798, "record": 900},
+            },
+            {
+                "rogueId": "rogue_2",
+                "relicCnt": 42,
+                "bank": {"current": 310, "record": 500},
+            },
+        ]
+    },
+    "rogueInfoMap": {
+        "rogue_1": {"name": "傀影与猩红孤钻"},
+        "rogue_2": {"name": "水月与深蓝之树"},
+    },
+    "tower": {
+        "reward": {
+            "lowerItem": {"current": 30, "total": 60},
+            "higherItem": {"current": 6, "total": 24},
+            "termTs": 1694807999,
+        }
+    },
+    "recruit": [
+        {"startTs": -1, "finishTs": -1, "state": 1},
+        {"startTs": 1, "finishTs": int(NOW + 5400), "state": 2},
+        {"startTs": 1, "finishTs": int(NOW - 120), "state": 2},
+        {"startTs": -1, "finishTs": -1, "state": 1},
+    ],
+    "building": {
+        "powers": [
+            {
+                "slotId": "slot_26",
+                "level": 3,
+                "chars": [{"charId": "char_1012_skadi2", "ap": 8_640_000, "index": 0}],
+            },
+            {
+                "slotId": "slot_16",
+                "level": 3,
+                "chars": [{"charId": "char_4055_bgsnow", "ap": 4_320_000, "index": 0}],
+            },
+        ],
+        "manufactures": [
+            {
+                "slotId": "slot_14",
+                "level": 3,
+                "chars": [
+                    {"charId": "char_1013_chen2", "ap": 1_800_000, "index": 0},
+                    {"charId": "char_002_amiya", "ap": 7_200_000, "index": 1},
+                ],
+            }
+        ],
+        "tradings": [
+            {
+                "slotId": "slot_24",
+                "level": 3,
+                "chars": [
+                    {"charId": "char_198_blackd", "ap": 2_160_000, "index": 0},
+                ],
+            }
+        ],
+        "dormitories": [
+            {
+                "slotId": "slot_28",
+                "level": 5,
+                "chars": [{"charId": "char_003_kalts", "ap": 8_640_000, "index": 0}],
+            }
+        ],
+        "control": {
+            "slotId": "slot_34",
+            "level": 5,
+            "chars": [{"charId": "char_4009_irene", "ap": 6_480_000, "index": 0}],
+        },
+        "meeting": {
+            "slotId": "slot_36",
+            "level": 3,
+            "chars": [{"charId": "char_436_whispr", "ap": 8_640_000, "index": 0}],
+            "clue": {
+                "own": 10,
+                "received": 2,
+                "dailyReward": True,
+                "sharing": False,
+                "board": ["PENGUIN", "GLASGOW", "KJERAG", "BLACKSTEEL", "RHODES"],
+            },
+        },
+        "labor": {"value": 152, "maxValue": 200},
+        "hire": {"level": 3, "refreshCount": 4},
+        "training": {
+            "level": 3,
+            "trainee": {"charId": "char_1012_skadi2"},
+            "trainer": {"charId": "char_003_kalts"},
+        },
+    },
 }
 
 
@@ -101,6 +222,11 @@ async def main() -> None:
         ("sanity.html", "sanity", sanity),
         ("operator_list.html", "roster", roster),
         ("operator.html", "op", detail),
+        ("building.html", "building", build_building_context(PLAYER)),
+        ("campaign.html", "campaign", build_campaign_context(PLAYER)),
+        ("rogue.html", "rogue", build_rogue_context(PLAYER)),
+        ("task.html", "task", build_task_context(PLAYER)),
+        ("recruit.html", "recruit", build_recruit_context(PLAYER, now=NOW)),
     ]
     for template, key, context in cards:
         path = await renderer.render_html(

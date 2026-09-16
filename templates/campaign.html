@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+      .reward-block {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        margin: 2px 0 14px;
+      }
+      .reward-value {
+        font-size: 60px;
+        font-weight: 700;
+        line-height: 0.9;
+        color: var(--accent);
+        letter-spacing: -2px;
+      }
+      .reward-max {
+        font-size: 19px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .reward-tag {
+        margin-left: auto;
+        font-size: 12px;
+        letter-spacing: 1.6px;
+        padding: 5px 13px;
+        border: 1px solid var(--line);
+        color: var(--label);
+      }
+      .map-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 9px 2px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+      .map-row:last-child {
+        border-bottom: none;
+      }
+      .map-name {
+        flex: 1;
+        font-size: 14px;
+      }
+      .map-zone {
+        font-size: 11px;
+        color: var(--muted);
+        margin-left: 8px;
+      }
+      .map-kills {
+        font-size: 15px;
+        font-weight: 700;
+        width: 74px;
+        text-align: right;
+      }
+      .map-row.done .map-kills {
+        color: var(--accent);
+      }
+      .map-mark {
+        flex: none;
+        width: 46px;
+        font-size: 10px;
+        letter-spacing: 1px;
+        text-align: center;
+        padding: 2px 0;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .map-row.done .map-mark {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">剿灭作战</div>
+        <div class="card-subtitle">Annihilation</div>
+      </div>
+      <div class="stripes"></div>
+
+      <div class="section">
+        <div class="section-title">本周合成玉</div>
+        <div class="reward-block">
+          <span class="reward-value">{{ campaign.reward.current }}</span>
+          <span class="reward-max">/ {{ campaign.reward.total }}</span>
+          <span class="reward-tag">
+            {{ campaign.cleared }} / {{ campaign.total }} 已满击杀
+          </span>
+        </div>
+        <div class="progress">
+          <div class="progress-fill" style="width: {{ campaign.reward.percent }}%"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">作战记录</div>
+        {% if campaign.records %}
+        {% for record in campaign.records %}
+        <div class="map-row {% if record.max_kills >= 400 %}done{% endif %}">
+          <span class="map-name">
+            {{ record.name }}
+            {% if record.zone %}<span class="map-zone">{{ record.zone }}</span>{% endif %}
+          </span>
+          <span class="map-mark">
+            {% if record.max_kills >= 400 %}满击杀{% else %}未满{% endif %}
+          </span>
+          <span class="map-kills">{{ record.max_kills }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty">暂无剿灭记录</div>
+        {% endif %}
+      </div>
+
+      <div class="card-footer">
+        <span>满击杀为 400 杀，未满击杀无法获得全部合成玉</span>
+        <span>SNAPSHOT / SKLAND</span>
+      </div>
+    </div>
+  </body>
+</html>

@@ -85,7 +85,7 @@ def format_stage(value: Any) -> str:
     return text[3:] if text.startswith("st_") else text
 
 
-def _progress(node: Any) -> dict[str, int]:
+def progress_node(node: Any) -> dict[str, int]:
     """Normalize a ``{current, total}`` progress node.
 
     Args:
@@ -182,8 +182,8 @@ def build_note_context(
         "skin_count": int(status.get("skinCnt") or 0) or len(skins),
         "assist": assist,
         "sanity": build_sanity_context(data, now),
-        "daily": _progress(routine.get("daily")),
-        "weekly": _progress(routine.get("weekly")),
-        "campaign": _progress((data.get("campaign") or {}).get("reward")),
+        "daily": progress_node(routine.get("daily")),
+        "weekly": progress_node(routine.get("weekly")),
+        "campaign": progress_node((data.get("campaign") or {}).get("reward")),
         "data_time": format_timestamp(status.get("storeTs")),
     }

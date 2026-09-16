@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+      .summary {
+        display: flex;
+        border: 1px solid var(--line);
+        margin-bottom: 20px;
+      }
+      .summary-cell {
+        flex: 1;
+        padding: 10px 14px;
+        border-right: 1px solid var(--line);
+      }
+      .summary-cell:last-child {
+        border-right: none;
+      }
+      .summary-key {
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 1.3px;
+      }
+      .summary-val {
+        font-size: 20px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .slot-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .slot-card {
+        border: 1px solid var(--line);
+        padding: 13px 15px;
+        position: relative;
+      }
+      .slot-card.running {
+        border-color: var(--accent);
+      }
+      .slot-index {
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 1.4px;
+      }
+      .slot-state {
+        font-size: 18px;
+        font-weight: 700;
+        margin-top: 6px;
+      }
+      .slot-card.running .slot-state {
+        color: var(--accent);
+      }
+      .slot-card.done .slot-state {
+        color: var(--accent);
+      }
+      .slot-time {
+        font-size: 12px;
+        color: var(--label);
+        margin-top: 5px;
+      }
+      .slot-bar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--line);
+      }
+      .slot-card.running .slot-bar,
+      .slot-card.done .slot-bar {
+        background: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">公开招募</div>
+        <div class="card-subtitle">Recruitment</div>
+      </div>
+      <div class="stripes"></div>
+
+      <div class="summary">
+        <div class="summary-cell">
+          <div class="summary-key">栏位</div>
+          <div class="summary-val">{{ recruit.slots | length }}</div>
+        </div>
+        <div class="summary-cell">
+          <div class="summary-key">招募中</div>
+          <div class="summary-val">{{ recruit.running }}</div>
+        </div>
+        <div class="summary-cell">
+          <div class="summary-key">可领取</div>
+          <div class="summary-val">{{ recruit.ready }}</div>
+        </div>
+      </div>
+
+      {% if recruit.slots %}
+      <div class="slot-grid">
+        {% for slot in recruit.slots %}
+        <div class="slot-card {{ slot.state }}">
+          <div class="slot-bar"></div>
+          <div class="slot-index">SLOT {{ slot.index }}</div>
+          <div class="slot-state">{{ slot.state_cn }}</div>
+          <div class="slot-time">{{ slot.remaining_text or "—" }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty">没有读取到公开招募栏位</div>
+      {% endif %}
+
+      <div class="card-footer">
+        <span>森空岛接口只返回栏位状态，不返回公招词条</span>
+        <span>SNAPSHOT / SKLAND</span>
+      </div>
+    </div>
+  </body>
+</html>

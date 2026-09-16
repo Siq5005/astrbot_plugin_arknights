@@ -103,6 +103,11 @@ EXPECTED_COMMANDS = {
     "方舟干员列表",
     "方舟干员",
     "方舟面板",
+    "方舟基建",
+    "方舟剿灭",
+    "方舟肉鸽",
+    "方舟任务",
+    "方舟公招",
 }
 
 # Commands registered by astrbot_plugin_endfield that must never be claimed by

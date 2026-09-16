@@ -25,6 +25,13 @@ from astrbot.api.star import Context, Star, register
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
 from .core.cards import build_note_context, build_sanity_context
+from .core.daily import (
+    build_building_context,
+    build_campaign_context,
+    build_recruit_context,
+    build_rogue_context,
+    build_task_context,
+)
 from .core.hypergryph import HypergryphClient, HypergryphError
 from .core.operators import (
     build_operator_context,
@@ -77,6 +84,13 @@ HELP_TEXT = """罗德岛终端 · 明日方舟助手
 方舟干员列表          已持有干员图鉴
 方舟干员 <干员名>      单个干员详情
 
+【日常玩法】
+方舟基建              基建设施与干员心情
+方舟剿灭              剿灭作战与本周合成玉
+方舟肉鸽              集成战略收藏品与投资
+方舟任务              每日/每周任务与周常奖励
+方舟公招              公开招募栏位状态
+
 【签到与提醒】
 方舟签到              手动执行森空岛签到
 方舟订阅理智 / 方舟取消订阅理智  理智回满推送
@@ -103,6 +117,16 @@ HELP_SECTIONS = [
             {"cmd": "方舟理智", "desc": "理智与回满时间"},
             {"cmd": "方舟干员列表", "desc": "已持有干员图鉴"},
             {"cmd": "方舟干员 <干员名>", "desc": "单个干员详情"},
+        ],
+    },
+    {
+        "title": "日常玩法",
+        "items": [
+            {"cmd": "方舟基建", "desc": "基建设施与干员心情"},
+            {"cmd": "方舟剿灭", "desc": "剿灭作战与本周合成玉"},
+            {"cmd": "方舟肉鸽", "desc": "集成战略收藏品与投资"},
+            {"cmd": "方舟任务", "desc": "每日/每周任务与周常奖励"},
+            {"cmd": "方舟公招", "desc": "公开招募栏位状态"},
         ],
     },
     {
@@ -1019,3 +1043,188 @@ class ArknightsPlugin(Star):
                 )
             )
         return "\n".join(lines)
+
+    # ── daily play ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _lines(pairs: list[tuple[str, str]]) -> str:
+        """Join label/value pairs into a plain text fallback block.
+
+        Args:
+            pairs: Label and value pairs.
+
+        Returns:
+            One line per pair.
+        """
+        return "\n".join(f"{label}：{value}" for label, value in pairs)
+
+    async def _daily_data(self, event: AstrMessageEvent):
+        """Resolve the caller's binding and fetch the player snapshot.
+
+        Args:
+            event: Incoming message event.
+
+        Yields:
+            A single-element tuple carrying either an error message or the data.
+        """
+        resolved = await self._resolve_binding(event)
+        if not resolved:
+            return None, NO_BINDING_TEXT
+        user, binding = resolved
+        try:
+            data = await self._player_data(user, binding)
+        except SklandError as exc:
+            return None, await self._report_query_error(event, exc)
+        return data, None
+
+    @filter.command("方舟基建")
+    async def show_building(self, event: AstrMessageEvent):
+        """Show the base (基建) card."""
+        data, error = await self._daily_data(event)
+        if error:
+            yield event.plain_result(error)
+            return
+        context = build_building_context(data)
+        image = await self._render("building.html", {"building": context})
+        if image is None:
+            yield event.plain_result(
+                self._lines(
+                    [
+                        (
+                            "无人机",
+                            f"{context['labor']['value']} / {context['labor']['max']}",
+                        ),
+                        (
+                            "线索",
+                            f"持有 {context['clue']['own']}，已收 {context['clue']['received']}",
+                        ),
+                        ("线索板", "、".join(context["clue"]["board"]) or "无"),
+                        (
+                            "设施",
+                            "、".join(
+                                f"{item['name']}{len(item['slots'])}"
+                                for item in context["facilities"]
+                            ),
+                        ),
+                    ]
+                )
+            )
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    @filter.command("方舟剿灭")
+    async def show_campaign(self, event: AstrMessageEvent):
+        """Show the annihilation (剿灭作战) card."""
+        data, error = await self._daily_data(event)
+        if error:
+            yield event.plain_result(error)
+            return
+        context = build_campaign_context(data)
+        image = await self._render("campaign.html", {"campaign": context})
+        if image is None:
+            yield event.plain_result(
+                self._lines(
+                    [
+                        (
+                            "本周合成玉",
+                            f"{context['reward']['current']} / {context['reward']['total']}",
+                        ),
+                        ("已满击杀", f"{context['cleared']} / {context['total']}"),
+                    ]
+                    + [
+                        (record["name"], f"{record['max_kills']} 杀")
+                        for record in context["records"]
+                    ]
+                )
+            )
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    @filter.command("方舟肉鸽")
+    async def show_rogue(self, event: AstrMessageEvent):
+        """Show the integrated-strategies (集成战略) card."""
+        data, error = await self._daily_data(event)
+        if error:
+            yield event.plain_result(error)
+            return
+        context = build_rogue_context(data)
+        image = await self._render("rogue.html", {"rogue": context})
+        if image is None:
+            yield event.plain_result(
+                self._lines(
+                    [
+                        (
+                            theme["name"],
+                            f"收藏品 {theme['relics']} · 投资 {theme['bank']}",
+                        )
+                        for theme in context["themes"]
+                    ]
+                )
+                or "暂无集成战略记录"
+            )
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    @filter.command("方舟任务")
+    async def show_task(self, event: AstrMessageEvent):
+        """Show the routine (任务进度) card."""
+        data, error = await self._daily_data(event)
+        if error:
+            yield event.plain_result(error)
+            return
+        context = build_task_context(data)
+        image = await self._render("task.html", {"task": context})
+        if image is None:
+            yield event.plain_result(
+                self._lines(
+                    [
+                        (
+                            "每日任务",
+                            f"{context['daily']['current']} / {context['daily']['total']}",
+                        ),
+                        (
+                            "每周任务",
+                            f"{context['weekly']['current']} / {context['weekly']['total']}",
+                        ),
+                        (
+                            "剿灭合成玉",
+                            f"{context['campaign']['current']} / {context['campaign']['total']}",
+                        ),
+                        (
+                            "数据增补仪",
+                            f"{context['tower_lower']['current']} / {context['tower_lower']['total']}",
+                        ),
+                        (
+                            "数据增补条",
+                            f"{context['tower_higher']['current']} / {context['tower_higher']['total']}",
+                        ),
+                    ]
+                )
+            )
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    @filter.command("方舟公招")
+    async def show_recruit(self, event: AstrMessageEvent):
+        """Show the recruitment (公开招募) slot card."""
+        data, error = await self._daily_data(event)
+        if error:
+            yield event.plain_result(error)
+            return
+        context = build_recruit_context(data)
+        image = await self._render("recruit.html", {"recruit": context})
+        if image is None:
+            yield event.plain_result(
+                self._lines(
+                    [
+                        (
+                            f"栏位 {slot['index']}",
+                            slot["remaining_text"] or slot["state_cn"],
+                        )
+                        for slot in context["slots"]
+                    ]
+                )
+                or "没有读取到公开招募栏位"
+            )
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
