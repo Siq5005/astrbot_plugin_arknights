@@ -179,7 +179,7 @@ HELP_SECTIONS = [
 ]
 
 
-@register(PLUGIN_NAME, "Siq5005", "罗德岛终端", PLUGIN_VERSION)
+@register(PLUGIN_NAME, "Coe", "罗德岛终端", PLUGIN_VERSION)
 class ArknightsPlugin(Star):
     """Arknights data query and sign-in plugin."""
 

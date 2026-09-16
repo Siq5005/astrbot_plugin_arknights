@@ -295,6 +295,16 @@ async def main() -> int:
         str(_meta.get("version")) == str(plugin_module.PLUGIN_VERSION),
         f"metadata {_meta.get('version')} vs code {plugin_module.PLUGIN_VERSION}",
     )
+    # The author is declared twice — metadata.yaml for the market and @register
+    # for the runtime — and they had drifted apart once already.
+    from astrbot.core.star.star import star_map as _star_map
+
+    _registered = _star_map.get(plugin_module.__name__)
+    check(
+        "registered author matches metadata.yaml",
+        _registered is not None and str(_registered.author) == str(_meta.get("author")),
+        f"register {getattr(_registered, 'author', None)} vs metadata {_meta.get('author')}",
+    )
     for _field in ("display_name", "desc", "author", "repo"):
         check(
             f"metadata has {_field} for the plugin market",
