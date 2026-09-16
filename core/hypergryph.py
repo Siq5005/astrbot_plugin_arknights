@@ -1,0 +1,228 @@
+"""Hypergryph passport login flows.
+
+Provides the two interactive ways of obtaining a Hypergryph passport token that
+the Skland client can exchange for game credentials: scanning a QR code with the
+Skland app, or an SMS verification code. A pasted token can also be validated
+through :meth:`HypergryphClient.verify_token`.
+
+This module never imports ``astrbot``.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+AS_BASE = "https://as.hypergryph.com"
+
+# Skland app code. Verified to be accepted by gen_scan/login and to be the same
+# app code used later by the oauth2 grant exchange.
+SKLAND_APP_CODE = "4ca99fa6b56cc2ba"
+
+# Status returned by scan_status while the QR code has not been scanned yet.
+SCAN_STATUS_PENDING = 100
+
+
+class HypergryphError(Exception):
+    """Raised when a Hypergryph passport request fails."""
+
+
+class HypergryphClient:
+    """Client for Hypergryph passport login endpoints."""
+
+    def __init__(self, base_url: str = AS_BASE) -> None:
+        """Initialize the client.
+
+        Args:
+            base_url: Hypergryph passport service base URL.
+        """
+        self.base_url = base_url
+        self._client: httpx.AsyncClient | None = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Return the shared HTTP client, creating it on first use."""
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=25.0)
+        return self._client
+
+    async def close(self) -> None:
+        """Release the underlying HTTP connection pool."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Call a passport endpoint and return its JSON payload.
+
+        Args:
+            method: HTTP method.
+            path: Path appended to the base URL.
+            params: Query parameters.
+            json_data: JSON request body.
+
+        Returns:
+            Decoded JSON payload.
+
+        Raises:
+            HypergryphError: On transport failure, non-2xx status, malformed JSON
+                or a non-zero ``status`` field.
+        """
+        client = await self._get_client()
+        try:
+            resp = await client.request(
+                method,
+                f"{self.base_url}{path}",
+                params=params,
+                json=json_data,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            raise HypergryphError(f"请求失败: {exc}") from exc
+        except ValueError as exc:
+            raise HypergryphError("响应格式异常") from exc
+        if not isinstance(data, dict):
+            raise HypergryphError("响应格式异常")
+        if data.get("status") != 0:
+            raise HypergryphError(
+                str(data.get("msg") or data.get("message") or "操作失败")
+            )
+        return data
+
+    async def create_qr(self) -> dict[str, str]:
+        """Request a login QR code.
+
+        Returns:
+            Mapping with ``scan_id`` and ``scan_url``. ``scan_url`` uses the
+            ``hypergryph://`` custom scheme, so callers must render it as a QR
+            image rather than sending it as a link.
+
+        Raises:
+            HypergryphError: When the request is rejected.
+        """
+        data = await self._request(
+            "POST",
+            "/general/v1/gen_scan/login",
+            json_data={"appCode": SKLAND_APP_CODE},
+        )
+        payload = data.get("data") or {}
+        return {
+            "scan_id": str(payload.get("scanId", "")),
+            "scan_url": str(payload.get("scanUrl", "")),
+        }
+
+    async def poll_qr(self, scan_id: str) -> str | None:
+        """Poll the state of a login QR code.
+
+        Args:
+            scan_id: Identifier returned by :meth:`create_qr`.
+
+        Returns:
+            The ``scanCode`` once the user has scanned and confirmed, otherwise
+            ``None`` while the code is still pending.
+
+        Raises:
+            HypergryphError: When the code expired, was rejected, or the request
+                failed.
+        """
+        client = await self._get_client()
+        try:
+            resp = await client.get(
+                f"{self.base_url}/general/v1/scan_status",
+                params={"scanId": scan_id},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            raise HypergryphError(f"请求失败: {exc}") from exc
+        except ValueError as exc:
+            raise HypergryphError("响应格式异常") from exc
+        if not isinstance(data, dict):
+            raise HypergryphError("响应格式异常")
+        status = data.get("status")
+        if status == SCAN_STATUS_PENDING:
+            return None
+        if status != 0:
+            raise HypergryphError(str(data.get("msg") or "扫码登录失败"))
+        return str((data.get("data") or {}).get("scanCode") or "") or None
+
+    async def get_token_by_scan_code(self, scan_code: str) -> str:
+        """Exchange a scanned code for a passport token.
+
+        Args:
+            scan_code: Code returned by :meth:`poll_qr`.
+
+        Returns:
+            The Hypergryph passport token.
+
+        Raises:
+            HypergryphError: When the exchange is rejected.
+        """
+        data = await self._request(
+            "POST",
+            "/user/auth/v1/token_by_scan_code",
+            json_data={"scanCode": scan_code},
+        )
+        return str((data.get("data") or {}).get("token", ""))
+
+    async def send_phone_code(self, phone: str) -> None:
+        """Send an SMS login verification code.
+
+        Args:
+            phone: Phone number bound to the Hypergryph account.
+
+        Raises:
+            HypergryphError: When the request is rejected.
+        """
+        await self._request(
+            "POST",
+            "/general/v1/send_phone_code",
+            json_data={"phone": phone, "type": 2},
+        )
+
+    async def login_by_phone_code(self, phone: str, code: str) -> str:
+        """Exchange an SMS code for a passport token.
+
+        Args:
+            phone: Phone number bound to the Hypergryph account.
+            code: Verification code received by SMS.
+
+        Returns:
+            The Hypergryph passport token.
+
+        Raises:
+            HypergryphError: When the code is rejected.
+        """
+        data = await self._request(
+            "POST",
+            "/user/auth/v2/token_by_phone_code",
+            json_data={"phone": phone, "code": code},
+        )
+        return str((data.get("data") or {}).get("token", ""))
+
+    async def verify_token(self, token: str) -> dict[str, Any]:
+        """Validate a pasted passport token.
+
+        Args:
+            token: Hypergryph passport token.
+
+        Returns:
+            Basic account information such as ``hgId``.
+
+        Raises:
+            HypergryphError: When the token is invalid.
+        """
+        data = await self._request(
+            "GET", "/user/info/v1/basic", params={"token": token}
+        )
+        return data.get("data") or {}
