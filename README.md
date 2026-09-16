@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.3.1-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.3.2-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -58,7 +58,7 @@
 
 ✅ **图像资源** - 干员立绘 / 头像、职业徽章、稀有度 / 精英化 / 潜能标记、基建设施图标、时装立绘
 
-✅ **卡片装饰** - 蓝图网格、暗角、辉光、分卡主题与徽记水印，全部由 CSS 与内联 SVG 生成，无位图素材
+✅ **卡片视觉** - 每张卡片独立配色主题（12 套）、干员瓦片按稀有度着色、蓝图网格与渐变底纹，全部由 CSS 生成，无位图素材
 
 ✅ **指令隔离** - 所有指令以 `ark` 开头，与终末地插件（`~` 前缀）互不抢答；漏写唤醒前缀时给出提示
 
@@ -291,7 +291,7 @@ astrbot_plugin_arknights/
 
 | 文件 | 对应卡片 |
 |:-----|:---------|
-| `templates/base.css` | 全局配色与组件样式（`--accent` 控制强调色，默认琥珀 `#FFB400`） |
+| `templates/base.css` | 全局配色、卡片主题与组件样式（`--theme` 控制每张卡的主色） |
 | `templates/note.html` | 便签 |
 | `templates/sanity.html` | 理智 |
 | `templates/operator_list.html` / `operator.html` | 干员图鉴 / 干员详情 |
@@ -301,26 +301,35 @@ astrbot_plugin_arknights/
 | `templates/announce.html` | 官方公告 |
 | `templates/help.html` | 帮助菜单 |
 
-想改主色调，只改 `base.css` 里的 `--accent` 即可全局生效。
+想换某张卡的配色，改它主题块里的 `--theme` / `--theme-2` 即可；想改全局默认色，改 `:root` 里的同名变量。
 
-### 卡片背景装饰
+### 卡片主题与背景装饰
 
-卡片底不是纯色，而是**多层 CSS 叠加**（没有任何位图素材，因此仓库零增重、任意 DPI 都锐利、长卡片不会出现平铺接缝）：
+每张卡片有**独立配色主题**，主题类由渲染器**按模板名自动注入**（见 `core/render.py` 的 `CARD_THEMES`），
+新增卡片只需在模板里写 `class="card {{ card_class }}"`。
 
-| 层 | 内容 | 变量 |
-|:---|:---|:---|
-| 1 | 徽记水印（内联 SVG，约 600 字节） | `--wm-image` / `--wm-size` / `--wm-pos` |
-| 2 | 星空（仅抽卡卡） | `--stars` |
-| 3 | 蓝图网格 | `--grid-line` / `--grid-pitch` |
-| 4 | 琥珀辉光 | `--glow-color` / `--glow-at` |
-| 5 | 暗角 | `--vignette` |
+| 变量 | 作用 |
+|:---|:---|
+| `--theme` | 该卡主色；`.card` 内的 `--accent` 即取此值 |
+| `--theme-2` | 辅助色，用于顶部色条与分区标题渐变 |
+| `--theme-soft` | 主色的低透明度版本，用于底纹斜切块 |
 
-分区还叠了两处细节：`.panel` 左侧的琥珀渐变细边，以及页头下的扫描线。
+现有 **12 套主题**：`t-help`、`t-profile`、`t-sanity`、`t-operator`、`t-roster`、`t-gacha`、
+`t-announce`、`t-building`、`t-task`、`t-campaign`、`t-rogue`、`t-recruit`。
 
-按卡片主题覆盖变量即可换风格，现有主题：`t-gacha`（星空 + 星形水印）、`t-announce`、`t-building`、`t-rogue`、`t-roster`。
-主题类由渲染器**按模板名自动注入**（见 `core/render.py` 的 `CARD_THEMES`），新增卡片只需在模板里写 `class="card {{ card_class }}"`。
+卡片背景全部由 CSS 渐变叠加，**没有任何位图素材**（仓库零增重、任意 DPI 都锐利、长卡片不会出现平铺接缝）：
 
-> 水印刻意使用**非闭合图形**（信号条 + 危险条纹），因为矩形轮廓在数据区背后会被误读成面板边框。
+| 层 | 内容 |
+|:---|:---|
+| 1 | 主题色斜切块（128°） |
+| 2 / 3 | 48px 蓝图网格 |
+| 4 | 左上柔光 |
+| 5 | 底色渐变 `#151824 → #0b0d14` |
+
+结构性装饰共三处：`.card::before` 是顶部 4px 主题双色条，`.card::after` 是右上角旋转的装饰框
+（主题色危险条纹），每个 `.panel` 顶部还有一条 2px 主题渐变。
+
+干员瓦片按**稀有度**着色——渲染时给瓦片加 `rarity-{星级}` 类（`rarity-4` / `rarity-5` / `rarity-6`）。
 
 ---
 
@@ -344,6 +353,12 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.3.2 (2026-09-16)
+
+- 🎨 **卡片视觉改版**：每张卡片改为**独立配色主题**，不再共用单一琥珀色，替换 0.3.0 引入的水印 / 暗角 / 辉光方案。新增 `--theme` / `--theme-2` / `--theme-soft` 三件套，`.card` 内 `--accent` 直接取 `--theme`，主题类由渲染器按模板名自动注入，现覆盖全部 13 张卡片
+- 🎨 **干员瓦片按稀有度着色**：渲染时给瓦片加 `rarity-{星级}` 类（4★ / 5★ / 6★ 各有配色），星级数据由 `core/cards.py` 与 `core/gacha.py` 一并提供
+- 🎨 排版与结构刷新：卡片圆角、顶部主题双色条、右上角旋转装饰框、面板顶部主题渐变条、分区标题改菱形标记，底色改为 `#151824 → #0b0d14` 渐变 + 48px 蓝图网格
 
 ### 0.3.1 (2026-09-16)
 
