@@ -10,6 +10,7 @@ import asyncio
 import base64
 import io
 import time
+from pathlib import Path
 from typing import Any
 
 import qrcode
@@ -17,8 +18,10 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.message_components import Image, Plain
 from astrbot.api.star import Context, Star, register
+from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
 from .core.hypergryph import HypergryphClient, HypergryphError
+from .core.render import Renderer
 from .core.skland import SklandClient, SklandError
 from .core.store import Store
 
@@ -54,6 +57,39 @@ token绑定 <token>     使用鹰角通行证 token 绑定
 账号凭证仅保存在本机，且不会在任何回复中回显。
 """
 
+# Structured copy of HELP_TEXT used by the rendered help card.
+HELP_SECTIONS = [
+    {
+        "title": "账号绑定（请私聊使用）",
+        "items": [
+            {"cmd": "扫码绑定", "desc": "使用森空岛 APP 扫码登录"},
+            {"cmd": "验证码绑定 <手机号>", "desc": "发送短信验证码"},
+            {"cmd": "验证码绑定 <手机号> <验证码>", "desc": "完成绑定"},
+            {"cmd": "token绑定 <token>", "desc": "使用鹰角通行证 token 绑定"},
+            {"cmd": "绑定列表", "desc": "查看所有绑定账号"},
+            {"cmd": "切换绑定 <序号>", "desc": "切换主账号"},
+            {"cmd": "删除绑定 <序号>", "desc": "解绑指定账号"},
+        ],
+    },
+    {
+        "title": "数据查询",
+        "items": [
+            {"cmd": "便签", "desc": "账号总览"},
+            {"cmd": "理智", "desc": "理智与回满时间"},
+            {"cmd": "干员列表", "desc": "已持有干员图鉴"},
+            {"cmd": "<干员名>面板", "desc": "单个干员详情"},
+        ],
+    },
+    {
+        "title": "签到与提醒",
+        "items": [
+            {"cmd": "签到", "desc": "手动执行森空岛签到"},
+            {"cmd": "订阅理智 / 取消订阅理智", "desc": "理智回满推送"},
+            {"cmd": "订阅签到 / 取消订阅签到", "desc": "群内签到结果通知"},
+        ],
+    },
+]
+
 
 @register(PLUGIN_NAME, "coe", "罗德岛终端", PLUGIN_VERSION)
 class ArknightsPlugin(Star):
@@ -72,16 +108,57 @@ class ArknightsPlugin(Star):
         self.skland = SklandClient()
         self.hypergryph = HypergryphClient()
         self._qr_tasks: set[asyncio.Task[None]] = set()
+        self._templates_dir = Path(__file__).parent / "templates"
+        self._renderer: Renderer | None = None
+        self._base_css: str | None = None
 
     async def terminate(self) -> None:
         """Release network resources and cancel background tasks."""
         for task in list(self._qr_tasks):
             task.cancel()
         self._qr_tasks.clear()
+        if self._renderer is not None:
+            await self._renderer.close()
+            self._renderer = None
         await self.skland.close()
         await self.hypergryph.close()
 
     # ── helpers ───────────────────────────────────────────────────────────
+
+    async def _render(self, template: str, data: dict[str, Any]) -> Path | None:
+        """Render a card image.
+
+        Args:
+            template: Template filename inside the plugin's ``templates`` dir.
+            data: Template variables.
+
+        Returns:
+            Path of the rendered image, or ``None`` when rendering is unavailable
+            so the caller can fall back to text.
+        """
+        if self._renderer is None:
+            cache_dir = (
+                Path(get_astrbot_plugin_data_path()) / PLUGIN_NAME / "render_cache"
+            )
+            self._renderer = Renderer(
+                self._templates_dir,
+                cache_dir,
+                int(self.config.get("render_timeout", 30000) or 30000),
+            )
+        if self._base_css is None:
+            try:
+                self._base_css = (self._templates_dir / "base.css").read_text(
+                    encoding="utf-8"
+                )
+            except OSError as exc:
+                logger.error("读取 base.css 失败: %s", exc)
+                self._base_css = ""
+        payload: dict[str, Any] = {
+            "base_css": self._base_css,
+            "version": PLUGIN_VERSION,
+        }
+        payload.update(data)
+        return await self._renderer.render_html(template, payload)
 
     @staticmethod
     def _args(event: AstrMessageEvent) -> list[str]:
@@ -192,8 +269,12 @@ class ArknightsPlugin(Star):
 
     @filter.command("ark", alias={"方舟帮助", "ark帮助"})
     async def show_help(self, event: AstrMessageEvent):
-        """Show the plugin command overview."""
-        yield event.plain_result(HELP_TEXT)
+        """Show the plugin command overview as a card."""
+        image = await self._render("help.html", {"sections": HELP_SECTIONS})
+        if image is None:
+            yield event.plain_result(HELP_TEXT)
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
 
     @filter.command("扫码绑定")
     async def bind_by_qr(self, event: AstrMessageEvent):
