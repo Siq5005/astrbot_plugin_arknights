@@ -253,6 +253,7 @@ def test_analyze_reports_current_pity():
     # eight pulls in total; the six star was the first, so seven since
     assert ctx["pity"] == 7
     assert ctx["six_stars"][0]["pulls"] == 1
+    assert ctx["six_stars"][0]["stars"] == 6
 
 
 def test_analyze_resolves_names_from_char_info():

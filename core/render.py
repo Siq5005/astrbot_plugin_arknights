@@ -30,10 +30,17 @@ CACHE_MAX_AGE_SECONDS = 300
 # Per-card decoration themes, keyed by template file name. The renderer injects
 # the class so neither the templates' call sites nor main.py has to track it.
 CARD_THEMES: dict[str, str] = {
+    "help.html": "t-help",
+    "note.html": "t-profile",
+    "sanity.html": "t-sanity",
+    "operator.html": "t-operator",
     "gacha.html": "t-gacha",
     "announce.html": "t-announce",
     "announce_detail.html": "t-announce",
     "building.html": "t-building",
+    "task.html": "t-task",
+    "campaign.html": "t-campaign",
+    "recruit.html": "t-recruit",
     "rogue.html": "t-rogue",
     "operator_list.html": "t-roster",
 }

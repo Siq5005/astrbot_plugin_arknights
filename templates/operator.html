@@ -6,39 +6,45 @@
       {{ base_css | safe }}
       .detail {
         display: flex;
-        gap: 26px;
+        gap: 24px;
         align-items: flex-start;
       }
       .detail-portrait {
-        width: 286px;
+        width: 320px;
         flex: none;
         position: relative;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background:
+          linear-gradient(145deg, rgba(255, 202, 98, 0.2), transparent 40%),
+          linear-gradient(25deg, rgba(255, 113, 143, 0.18), transparent 45%),
+          #151925;
       }
       .detail-portrait img {
-        width: 286px;
-        height: 372px;
-        object-fit: cover;
-        object-position: center top;
-        border: 1px solid var(--line);
-        background: var(--panel-alt);
+        width: 320px;
+        height: 456px;
+        object-fit: contain;
+        object-position: center bottom;
         display: block;
+        filter: saturate(1.08) contrast(1.02);
       }
       .detail-portrait::after {
         content: "";
         position: absolute;
         bottom: 0;
         left: 0;
-        width: 62px;
+        width: 92px;
         height: 6px;
-        background: var(--accent);
+        background: linear-gradient(90deg, var(--theme), var(--theme-2));
       }
       .detail-body {
         flex: 1;
         min-width: 0;
       }
       .detail-name {
-        font-size: 34px;
-        font-weight: 700;
+        font-size: 36px;
+        font-weight: 800;
         letter-spacing: 1px;
         line-height: 1.1;
       }
@@ -48,7 +54,7 @@
         width: 6px;
         height: 28px;
         margin-right: 12px;
-        background: var(--accent);
+        background: linear-gradient(180deg, var(--theme), var(--theme-2));
         vertical-align: -2px;
       }
       .detail-meta {
@@ -76,8 +82,8 @@
         color: var(--label);
       }
       .badge.hot {
-        border-color: var(--accent);
-        color: var(--accent);
+        border-color: var(--theme);
+        color: var(--theme);
       }
       .skill-row {
         display: flex;
@@ -94,6 +100,7 @@
         width: 42px;
         height: 42px;
         border: 1px solid var(--line);
+        border-radius: 6px;
         background: var(--panel-alt);
         flex: none;
       }
@@ -109,14 +116,14 @@
         font-size: 10px;
         letter-spacing: 1px;
         color: #0a0b0d;
-        background: var(--accent);
+        background: var(--theme);
         padding: 1px 5px;
       }
     </style>
   </head>
   <body>
     <div class="card {{ card_class }}">
-      <div class="detail">
+      <div class="detail rarity-{{ op.stars }}">
         <div class="detail-portrait">
           <img src="{{ op.portrait or op.avatar }}" alt="{{ op.name }}" />
         </div>

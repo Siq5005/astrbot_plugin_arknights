@@ -111,6 +111,7 @@ def test_build_note_context_falls_back_to_list_lengths():
     # still derived from the char id because assets are keyed by it
     assert ctx["assist"][1]["name"] == "unknown"
     assert ctx["assist"][1]["avatar"].endswith("/char_avatar/unknown.png")
+    assert ctx["secretary"]["stars"] == 1
 
 
 def test_build_note_context_handles_empty_data():

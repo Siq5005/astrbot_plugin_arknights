@@ -184,6 +184,7 @@ def build_note_context(
     secretary = status.get("secretary") or {}
     secretary_id = str(secretary.get("charId") or "")
     secretary_meta = char_info.get(secretary_id) or {}
+    secretary_stars = int(secretary_meta.get("rarity") or 0) + 1
 
     return {
         "nickname": status.get("name") or "",
@@ -192,13 +193,14 @@ def build_note_context(
         "secretary": {
             "char_id": secretary_id,
             "name": str(secretary_meta.get("name") or secretary_id),
+            "stars": secretary_stars,
             "portrait": secretary_portrait(
                 secretary_id, str(secretary.get("skinId") or ""), secretary_mode
             ),
             "profession_icon": profession_icon(
                 str(secretary_meta.get("profession") or "")
             ),
-            "rarity_icon": rarity_icon(int(secretary_meta.get("rarity") or 0) + 1),
+            "rarity_icon": rarity_icon(secretary_stars),
         },
         "register_date": format_date(status.get("registerTs")),
         "main_stage": format_stage(status.get("mainStageProgress")),

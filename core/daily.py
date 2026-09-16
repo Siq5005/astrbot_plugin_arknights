@@ -64,6 +64,7 @@ def _operator_ref(char_id: str, char_info: dict[str, Any]) -> dict[str, Any]:
     return {
         "char_id": char_id,
         "name": str(meta.get("name") or char_id),
+        "stars": int(meta.get("rarity") or 0) + 1,
         "avatar": char_avatar(char_id) if char_id else "",
     }
 

@@ -517,6 +517,7 @@ def _summarize(
                 {
                     "char_id": char_id,
                     "name": name,
+                    "stars": SIX_STAR,
                     "avatar": char_avatar(char_id) if char_id else "",
                     "portrait": char_portrait(char_id, 2) if char_id else "",
                     "pulls": since,

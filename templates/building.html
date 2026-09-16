@@ -161,7 +161,7 @@
           <div class="slot-level">Lv.{{ slot.level }}</div>
           <div class="slot-ops">
             {% for op in slot.operators %}
-            <div class="op">
+            <div class="op rarity-{{ op.stars }}">
               <img src="{{ op.avatar }}" alt="{{ op.name }}" />
               <div class="op-body">
                 <div class="op-name">{{ op.name }}</div>

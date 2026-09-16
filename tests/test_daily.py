@@ -69,6 +69,7 @@ def test_build_building_context_normalizes_facilities():
     power = ctx["facilities"][0]
     assert power["slots"][0]["level"] == 3
     assert power["slots"][0]["operators"][0]["name"] == "阿米娅"
+    assert power["slots"][0]["operators"][0]["stars"] == 5
     assert power["slots"][0]["operators"][0]["mood"] == 24.0
     assert power["slots"][0]["operators"][0]["mood_percent"] == 100
     assert ctx["labor"] == {"value": 150, "max": 200, "percent": 75}

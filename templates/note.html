@@ -11,9 +11,9 @@
         width: 100%;
       }
       .id-name {
-        font-size: 31px;
-        font-weight: 700;
-        letter-spacing: 1.5px;
+        font-size: 34px;
+        font-weight: 800;
+        letter-spacing: 0.8px;
       }
       .id-level {
         font-size: 12px;
@@ -21,19 +21,19 @@
         letter-spacing: 1.6px;
       }
       .id-level b {
-        color: var(--accent);
-        font-size: 24px;
+        color: var(--theme);
+        font-size: 26px;
         margin-left: 7px;
       }
       .body {
         display: flex;
-        gap: 18px;
+        gap: 22px;
         align-items: stretch;
       }
       /* Assistant column: the artwork fills the whole column height and the
          badge strip sits underneath, as in the approved design. */
       .assistant {
-        width: 300px;
+        width: 316px;
         flex: none;
         display: flex;
         flex-direction: column;
@@ -43,13 +43,20 @@
         flex: 1;
         min-height: 430px;
         border: 1px solid var(--line);
-        background: radial-gradient(
-            circle at 50% 22%,
-            rgba(255, 180, 0, 0.12) 0%,
-            rgba(255, 180, 0, 0) 64%
-          ),
-          linear-gradient(180deg, #1d222b 0%, #0e1013 100%);
+        border-radius: 8px 8px 0 0;
+        background:
+          linear-gradient(145deg, rgba(255, 130, 159, 0.22), transparent 42%),
+          linear-gradient(25deg, rgba(98, 219, 233, 0.18), transparent 48%),
+          linear-gradient(180deg, #222638 0%, #0e1119 100%);
         overflow: hidden;
+      }
+      .assistant-art::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        background: linear-gradient(180deg, transparent 68%, rgba(8, 10, 17, 0.38));
+        pointer-events: none;
       }
       .assistant-art img {
         width: 100%;
@@ -57,6 +64,7 @@
         object-fit: contain;
         object-position: center bottom;
         display: block;
+        filter: saturate(1.1) contrast(1.02);
       }
       .assistant-badge {
         display: flex;
@@ -65,7 +73,8 @@
         border: 1px solid var(--line);
         border-top: none;
         padding: 9px 12px;
-        background: var(--panel-alt);
+        border-radius: 0 0 8px 8px;
+        background: linear-gradient(90deg, rgba(255, 130, 159, 0.14), rgba(20, 23, 35, 0.95));
       }
       .assistant-badge .cls {
         width: 30px;
@@ -91,8 +100,9 @@
         margin-top: 9px;
         padding: 9px 11px;
         border: 1px solid var(--line);
-        border-left: 2px solid var(--accent);
-        background: #14161b;
+        border-left: 2px solid var(--theme-2);
+        border-radius: 6px;
+        background: rgba(20, 22, 33, 0.86);
         font-size: 12px;
         color: var(--label);
         line-height: 1.55;
@@ -107,6 +117,9 @@
         display: flex;
         margin-bottom: 14px;
         border: 1px solid var(--line);
+        border-radius: 7px;
+        overflow: hidden;
+        background: rgba(13, 15, 24, 0.66);
       }
       .stat-cell {
         flex: 1;
@@ -123,7 +136,7 @@
       }
       .stat-val {
         font-size: 21px;
-        font-weight: 700;
+        font-weight: 800;
         margin-top: 4px;
       }
       .assist-op {
@@ -132,6 +145,7 @@
       .assist-op img {
         width: 98px;
         height: 98px;
+        border-color: color-mix(in srgb, var(--theme-2) 34%, var(--line));
       }
       .assist-op .name {
         font-size: 11.5px;
@@ -158,7 +172,7 @@
       <div class="stripes"></div>
 
       <div class="body">
-        <div class="assistant">
+        <div class="assistant rarity-{{ note.secretary.stars }}">
           <div class="assistant-art">
             {% if note.secretary.portrait %}
             <img src="{{ note.secretary.portrait }}" alt="{{ note.secretary.name }}" />
@@ -244,7 +258,7 @@
             {% if note.assist %}
             <div class="grid">
               {% for op in note.assist %}
-              <div class="tile assist-op">
+              <div class="tile assist-op rarity-{{ op.stars }}" data-rarity="{{ op.stars }}">
                 <img src="{{ op.avatar }}" alt="{{ op.name }}" />
                 <div class="name">{{ op.name }}</div>
                 <div class="lv">Lv.{{ op.level }}</div>

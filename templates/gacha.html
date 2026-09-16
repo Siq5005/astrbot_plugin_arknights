@@ -285,7 +285,7 @@
         {% if banner.six_stars %}
         <div class="ops">
           {% for item in banner.six_stars %}
-          <div class="op">
+          <div class="op rarity-{{ item.stars }}">
             <div class="op-art">
               <img src="{{ item.portrait or item.avatar }}" alt="{{ item.name }}" />
               {% if item.is_up is sameas true %}

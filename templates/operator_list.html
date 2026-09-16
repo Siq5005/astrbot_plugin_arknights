@@ -5,7 +5,11 @@
     <style>
       {{ base_css | safe }}
       .roster-group {
-        margin-bottom: 16px;
+        margin-bottom: 20px;
+        padding: 12px 14px 14px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: rgba(13, 15, 24, 0.58);
       }
       .roster-head {
         display: flex;
@@ -20,10 +24,10 @@
         height: 20px;
         flex: none;
     }
-    .roster-name {
+      .roster-name {
         font-size: 13px;
         font-weight: 700;
-        color: var(--accent);
+        color: var(--theme);
         letter-spacing: 2px;
       }
       .roster-count {
@@ -35,18 +39,18 @@
       }
       .tile {
         position: relative;
-        width: 70px;
+        width: 76px;
       }
       .tile img {
-        width: 64px;
-        height: 64px;
+        width: 70px;
+        height: 70px;
       }
       .tile .stars {
         font-size: 10px;
-        color: var(--accent);
+        color: var(--theme);
         text-align: center;
         line-height: 12px;
-        letter-spacing: -1px;
+        letter-spacing: 0;
       }
       .tile .elite {
         position: absolute;
@@ -55,7 +59,7 @@
         font-size: 10px;
         font-weight: 700;
         color: #0a0b0d;
-        background: var(--accent);
+        background: linear-gradient(135deg, var(--theme), var(--theme-2));
         padding: 0 4px;
       }
       .owned-bar {
@@ -63,6 +67,9 @@
         gap: 0;
         border: 1px solid var(--line);
         margin-bottom: 20px;
+        border-radius: 7px;
+        overflow: hidden;
+        background: rgba(13, 15, 24, 0.66);
       }
       .owned-cell {
         flex: 1;
@@ -112,7 +119,7 @@
         </div>
         <div class="grid">
           {% for op in group.operators %}
-          <div class="tile">
+          <div class="tile rarity-{{ op.stars }}" data-rarity="{{ op.stars }}">
             <img src="{{ op.avatar }}" alt="{{ op.name }}" />
             {% if op.elite %}<span class="elite">E{{ op.elite }}</span>{% endif %}
             <div class="stars">{{ "★" * op.stars }}</div>
