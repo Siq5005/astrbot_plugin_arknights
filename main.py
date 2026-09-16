@@ -65,7 +65,13 @@ QR_PROMPT = """请使用「森空岛」APP 扫描二维码完成登录
 
 二维码 2 分钟内有效；登录成功、超时或被拒后会自动撤回。"""
 
-NO_BINDING_TEXT = "你还没有绑定账号。请在私聊发送 `ark绑定` 扫码登录。"
+# Appended to the QR prompt when binding is started in a group chat.
+GROUP_QR_WARNING = (
+    "\n\n群聊中扫码请注意：二维码等同于登录凭证，不要转发给他人。\n"
+    "谁先扫码，TA 的森空岛账号就会绑定到发起指令的这个人名下。"
+)
+
+NO_BINDING_TEXT = "你还没有绑定账号。发送 `ark绑定` 扫码登录即可。"
 
 # Substrings that indicate the stored passport token is no longer usable.
 AUTH_ERROR_MARKERS = ("未登录", "失效", "过期", "unauthorized", "401", "403")
@@ -79,7 +85,7 @@ HELP_TEXT = """罗德岛终端 · 明日方舟助手
 
 所有指令以 `ark` 开头，避免与终末地插件（zmd）的同名指令冲突。
 
-【账号绑定】（请私聊使用）
+【账号绑定】
 ark绑定              使用森空岛 APP 扫码登录（唯一登录方式）
 ark绑定列表          查看所有绑定账号
 ark切换绑定 <序号>    切换主账号
@@ -100,7 +106,7 @@ ark公招              公开招募栏位状态
 
 【官方公告】
 ark公告              公告列表（`ark公告 <编号>` 看正文）
-ark订阅公告 / ark取消订阅公告  新公告私聊推送
+ark订阅公告 / ark取消订阅公告  新公告推送到当前会话
 
 【抽卡】
 ark抽卡分析          六星统计、保底与 UP 判定
@@ -119,7 +125,7 @@ ark订阅签到 / ark取消订阅签到  群内签到结果通知
 # Structured copy of HELP_TEXT used by the rendered help card.
 HELP_SECTIONS = [
     {
-        "title": "账号绑定（请私聊使用）",
+        "title": "账号绑定",
         "items": [
             {"cmd": "ark绑定", "desc": "森空岛 APP 扫码登录（唯一登录方式）"},
             {"cmd": "ark绑定列表", "desc": "查看所有绑定账号"},
@@ -150,7 +156,7 @@ HELP_SECTIONS = [
         "title": "官方公告",
         "items": [
             {"cmd": "ark公告", "desc": "公告列表，可带编号看正文"},
-            {"cmd": "ark订阅公告 / ark取消订阅公告", "desc": "新公告私聊推送"},
+            {"cmd": "ark订阅公告 / ark取消订阅公告", "desc": "新公告推送到当前会话"},
         ],
     },
     {
@@ -166,7 +172,7 @@ HELP_SECTIONS = [
         "title": "签到与提醒",
         "items": [
             {"cmd": "ark签到", "desc": "手动执行森空岛签到"},
-            {"cmd": "ark订阅理智 / ark取消订阅理智", "desc": "理智回满推送"},
+            {"cmd": "ark订阅理智 / ark取消订阅理智", "desc": "理智回满推送到当前会话"},
             {"cmd": "ark订阅签到 / ark取消订阅签到", "desc": "群内签到结果通知"},
         ],
     },
@@ -459,9 +465,6 @@ class ArknightsPlugin(Star):
     @filter.command("ark绑定")
     async def bind_by_qr(self, event: AstrMessageEvent):
         """Bind an account by scanning a QR code with the Skland app."""
-        if not event.is_private_chat():
-            yield event.plain_result("为了账号安全，请在私聊中使用绑定指令。")
-            return
         user_key = event.get_sender_id()
         try:
             qr = await self.hypergryph.create_qr()
@@ -472,12 +475,18 @@ class ArknightsPlugin(Star):
             yield event.plain_result("获取二维码失败，请稍后重试。")
             return
 
+        # A QR code is a credential: in a group anyone reading the chat could
+        # scan it first and bind their own account under the sender's id, so the
+        # in-group copy says so plainly.
+        prompt = QR_PROMPT
+        if not event.is_private_chat():
+            prompt += GROUP_QR_WARNING
         png = self._qr_png(qr["scan_url"])
-        message_id = await self._send_qr_raw(event, png, QR_PROMPT)
+        message_id = await self._send_qr_raw(event, png, prompt)
         if message_id is None:
             yield event.chain_result(
                 [
-                    Plain(QR_PROMPT),
+                    Plain(prompt),
                     Image.fromBytes(png),
                 ]
             )
@@ -851,10 +860,7 @@ class ArknightsPlugin(Star):
 
     @filter.command("ark订阅理智")
     async def subscribe_sanity(self, event: AstrMessageEvent):
-        """Enable sanity-full notifications for the caller."""
-        if not event.is_private_chat():
-            yield event.plain_result("理智提醒通过私聊推送，请在私聊中订阅。")
-            return
+        """Enable sanity-full notifications for the caller's current session."""
         if not await self.store.get_user(event.get_sender_id()):
             yield event.plain_result(NO_BINDING_TEXT)
             return
@@ -862,8 +868,9 @@ class ArknightsPlugin(Star):
             event.get_sender_id(), event.unified_msg_origin, True
         )
         minutes = max(10, int(self.config.get("sanity_poll_interval", 20) or 20))
+        where = "本群" if not event.is_private_chat() else "私聊"
         yield event.plain_result(
-            f"已开启理智回满提醒，每 {minutes} 分钟检查一次。\n"
+            f"已开启理智回满提醒，每 {minutes} 分钟检查一次，回满后会推送到{where}。\n"
             "发送 `ark取消订阅理智` 可关闭。"
         )
 
@@ -1539,16 +1546,14 @@ class ArknightsPlugin(Star):
 
     @filter.command("ark订阅公告")
     async def subscribe_announce(self, event: AstrMessageEvent):
-        """Enable new-announcement notifications for the caller."""
-        if not event.is_private_chat():
-            yield event.plain_result("公告推送通过私聊发送，请在私聊中订阅。")
-            return
+        """Enable new-announcement notifications for the caller's session."""
         await self.store.set_announce_sub(
             event.get_sender_id(), event.unified_msg_origin, True
         )
         minutes = max(15, int(self.config.get("announce_poll_interval", 30) or 30))
+        where = "本群" if not event.is_private_chat() else "私聊"
         yield event.plain_result(
-            f"已订阅官方公告，每 {minutes} 分钟检查一次，有新公告会私聊推送。\n"
+            f"已订阅官方公告，每 {minutes} 分钟检查一次，有新公告会推送到{where}。\n"
             "发送 `ark取消订阅公告` 可关闭。"
         )
 

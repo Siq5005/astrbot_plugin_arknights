@@ -175,9 +175,15 @@ class StubEvent:
         mentions: bool = False,
     ) -> None:
         self.message_str = text
-        self.unified_msg_origin = f"test:PrivateMessage:{sender}"
         self._sender = sender
         self._private = private
+        # the origin has to follow the chat type, otherwise a group event would
+        # still look private to anything that keys off the session
+        self.unified_msg_origin = (
+            f"test:PrivateMessage:{sender}"
+            if private
+            else f"test:GroupMessage:{self.get_group_id()}"
+        )
         self.is_at_or_wake_command = at_or_wake
         self._mentions = mentions
         self.stopped = False
@@ -498,11 +504,24 @@ async def main() -> int:
         plugin.subscribe_announce(StubEvent("/ark订阅公告", private=False))
     )
     check(
-        "ark订阅公告 refuses in a group",
-        results and "私聊" in results[0][1],
+        "ark订阅公告 also works in a group and targets that group",
+        results and "本群" in results[0][1],
     )
     subs = await plugin.store.list_announce_subs()
     check("公告订阅已落库", len(subs) == 1, f"{subs}")
+    check(
+        "群聊订阅记录的是群会话",
+        subs and "Group" in str(subs[0].get("umo")),
+        f"{subs[0].get('umo') if subs else ''}",
+    )
+
+
+    check(
+        "群聊扫码会附带凭证警告",
+        "GROUP_QR_WARNING" in dir(plugin_module)
+        and "群聊中扫码请注意" in plugin_module.GROUP_QR_WARNING,
+    )
+
     await plugin.unsubscribe_announce(StubEvent("/ark取消订阅公告")).__anext__()
     check("公告订阅可取消", not await plugin.store.list_announce_subs())
 
@@ -563,6 +582,22 @@ async def main() -> int:
             and Path(results[0][1][0].path).is_file()
         )
         check(f"{label} renders an image", bool(image_ok))
+
+    # Sanity alerts need a binding, so this runs after the one above.
+    results = await drive(
+        plugin.subscribe_sanity(StubEvent("/ark订阅理智", private=False))
+    )
+    check(
+        "ark订阅理智 also works in a group",
+        results and "本群" in results[0][1],
+    )
+    sanity_subs = await plugin.store.list_sanity_subs()
+    check(
+        "理智订阅记录的是群会话",
+        sanity_subs and "Group" in str(sanity_subs[0].get("umo")),
+        f"{sanity_subs[0].get('umo') if sanity_subs else ''}",
+    )
+    await plugin.unsubscribe_sanity(StubEvent("/ark取消订阅理智")).__anext__()
 
     # Operator detail by argument; the form deliberately does not end in 面板 so
     # that the Endfield plugin's "xx面板" regex cannot also match it.
