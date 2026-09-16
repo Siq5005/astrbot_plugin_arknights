@@ -4,28 +4,83 @@
     <meta charset="utf-8" />
     <style>
       {{ base_css | safe }}
+      .id-block {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        width: 100%;
+      }
+      .id-name {
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: 1px;
+      }
+      .id-level {
+        font-size: 12px;
+        color: var(--label);
+        letter-spacing: 1.6px;
+      }
+      .id-level b {
+        color: var(--accent);
+        font-size: 23px;
+        margin-left: 7px;
+      }
+      .stat-strip {
+        display: flex;
+        margin: 4px 0 20px;
+        border: 1px solid var(--line);
+      }
+      .stat-cell {
+        flex: 1;
+        padding: 10px 14px;
+        border-right: 1px solid var(--line);
+      }
+      .stat-cell:last-child {
+        border-right: none;
+      }
+      .stat-key {
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 1.4px;
+      }
+      .stat-val {
+        font-size: 19px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .assist-op {
+        width: 84px;
+      }
+      .assist-op img {
+        width: 78px;
+        height: 78px;
+      }
     </style>
   </head>
   <body>
     <div class="card">
       <div class="card-header">
-        <div class="card-title">{{ note.nickname or "未知博士" }}</div>
-        <div class="card-subtitle">等级 {{ note.level }}</div>
+        <div class="id-block">
+          <div class="id-name">{{ note.nickname or "未知博士" }}</div>
+          <div class="id-level">LEVEL<b>{{ note.level }}</b></div>
+        </div>
       </div>
+      <div class="stripes"></div>
 
-      <div class="section">
-        <div class="section-title">档案</div>
-        <div class="row">
-          <span class="row-label">入职日期</span>
-          <span class="row-value">{{ note.register_date }}</span>
+      <div class="stat-strip">
+        <div class="stat-cell">
+          <div class="stat-key">入职日期</div>
+          <div class="stat-val">{{ note.register_date }}</div>
         </div>
-        <div class="row">
-          <span class="row-label">主线进度</span>
-          <span class="row-value">{{ note.main_stage }}</span>
+        <div class="stat-cell">
+          <div class="stat-key">主线进度</div>
+          <div class="stat-val">{{ note.main_stage }}</div>
         </div>
-        <div class="row">
-          <span class="row-label">干员 / 时装</span>
-          <span class="row-value">{{ note.char_count }} / {{ note.skin_count }}</span>
+        <div class="stat-cell">
+          <div class="stat-key">干员 / 时装</div>
+          <div class="stat-val">
+            {{ note.char_count }}<span style="color: var(--muted)"> / </span>{{ note.skin_count }}
+          </div>
         </div>
       </div>
 
@@ -33,12 +88,15 @@
         <div class="section-title">理智</div>
         <div class="row">
           <span class="row-label">当前</span>
-          <span class="row-value">{{ note.sanity.current }} / {{ note.sanity.max }}</span>
+          <span class="row-value accent">
+            {{ note.sanity.current }}
+            <span style="color: var(--muted); font-weight: 400">/ {{ note.sanity.max }}</span>
+          </span>
         </div>
         <div class="progress">
           <div class="progress-fill" style="width: {{ note.sanity.percent }}%"></div>
         </div>
-        <div class="row">
+        <div class="row" style="border-bottom: none">
           <span class="row-label">恢复</span>
           <span class="row-value">{{ note.sanity.remaining_text }}</span>
         </div>
@@ -64,7 +122,7 @@
         {% if note.assist %}
         <div class="grid">
           {% for op in note.assist %}
-          <div class="tile">
+          <div class="tile assist-op">
             <img src="{{ op.avatar }}" alt="{{ op.name }}" />
             <div class="name">{{ op.name }}</div>
           </div>
@@ -76,8 +134,8 @@
       </div>
 
       <div class="card-footer">
-        <span>数据时间：{{ note.data_time }}</span>
-        <span>数据来源：森空岛（上次同步快照）</span>
+        <span>数据时间 {{ note.data_time }}</span>
+        <span>SNAPSHOT / SKLAND</span>
       </div>
     </div>
   </body>

@@ -43,6 +43,14 @@ PLUGIN_VERSION = "0.1.0"
 QR_TIMEOUT = 120
 QR_POLL_INTERVAL = 2
 
+QR_PROMPT = """请使用「森空岛」APP 扫描二维码完成登录
+
+1. 打开森空岛 APP
+2. 点击右上角「+」→「扫一扫」
+3. 扫描下方二维码并确认登录
+
+二维码 2 分钟内有效；登录成功、超时或被拒后会自动撤回。"""
+
 NO_BINDING_TEXT = "你还没有绑定账号。请在私聊发送 `方舟绑定` 扫码登录。"
 
 # Substrings that indicate the stored passport token is no longer usable.
@@ -373,11 +381,11 @@ class ArknightsPlugin(Star):
             return
 
         png = self._qr_png(qr["scan_url"])
-        message_id = await self._send_qr_raw(event, png)
+        message_id = await self._send_qr_raw(event, png, QR_PROMPT)
         if message_id is None:
             yield event.chain_result(
                 [
-                    Plain(f"请使用森空岛 APP 扫码登录（{QR_TIMEOUT} 秒内有效）："),
+                    Plain(QR_PROMPT),
                     Image.fromBytes(png),
                 ]
             )
@@ -394,8 +402,10 @@ class ArknightsPlugin(Star):
         self._qr_tasks.add(task)
         task.add_done_callback(self._qr_tasks.discard)
 
-    async def _send_qr_raw(self, event: AstrMessageEvent, png: bytes) -> int | None:
-        """Send the QR image directly through the platform client.
+    async def _send_qr_raw(
+        self, event: AstrMessageEvent, png: bytes, prompt: str
+    ) -> int | None:
+        """Send the QR image and its instructions through the platform client.
 
         Used to capture the platform message id so the QR can be recalled once it
         is no longer valid. Returns ``None`` when the platform does not support
@@ -404,6 +414,7 @@ class ArknightsPlugin(Star):
         Args:
             event: Incoming message event.
             png: QR image bytes.
+            prompt: Instruction text sent alongside the image.
 
         Returns:
             The platform message id, or ``None``.
@@ -415,7 +426,8 @@ class ArknightsPlugin(Star):
                 {
                     "type": "image",
                     "data": {"file": f"base64://{base64.b64encode(png).decode()}"},
-                }
+                },
+                {"type": "text", "data": {"text": prompt}},
             ]
             group_id = event.get_group_id()
             if group_id:

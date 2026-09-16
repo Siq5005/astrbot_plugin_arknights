@@ -4,22 +4,28 @@
     <meta charset="utf-8" />
     <style>
       {{ base_css | safe }}
+      .help-group {
+        break-inside: avoid;
+      }
     </style>
   </head>
   <body>
     <div class="card">
       <div class="card-header">
         <div class="card-title">罗德岛终端</div>
-        <div class="card-subtitle">Arknights · v{{ version }}</div>
+        <div class="card-subtitle">Rhodes Island · v{{ version }}</div>
       </div>
+      <div class="stripes"></div>
 
       {% for section in sections %}
       <div class="section">
         <div class="section-title">{{ section.title }}</div>
         <div class="help-grid">
           {% for item in section["items"] %}
-          <div class="help-command">{{ item.cmd }}</div>
-          <div class="help-desc">{{ item.desc }}</div>
+          <div class="help-group">
+            <div class="help-command">{{ item.cmd }}</div>
+            <div class="help-desc">{{ item.desc }}</div>
+          </div>
           {% endfor %}
         </div>
       </div>
@@ -27,7 +33,7 @@
 
       <div class="card-footer">
         <span>账号凭证仅保存在本机，不会在任何回复中回显</span>
-        <span>数据来源：森空岛官方接口</span>
+        <span>DATA SOURCE / SKLAND</span>
       </div>
     </div>
   </body>

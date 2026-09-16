@@ -5,23 +5,28 @@
     <style>
       {{ base_css | safe }}
       .roster-group {
-        margin-bottom: 14px;
+        margin-bottom: 16px;
       }
       .roster-head {
         display: flex;
-        align-items: baseline;
-        gap: 8px;
-        margin-bottom: 8px;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 9px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid var(--line-soft);
       }
       .roster-name {
-        font-size: 14px;
-        font-weight: 600;
-        color: #4f8cff;
-        letter-spacing: 1px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--accent);
+        letter-spacing: 2px;
       }
       .roster-count {
-        font-size: 12px;
-        color: #6c7690;
+        font-size: 11px;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        padding: 0 6px;
+        line-height: 16px;
       }
       .tile {
         position: relative;
@@ -33,21 +38,44 @@
       }
       .tile .stars {
         font-size: 10px;
-        color: #ffb347;
+        color: var(--accent);
         text-align: center;
         line-height: 12px;
         letter-spacing: -1px;
       }
       .tile .elite {
         position: absolute;
-        top: 2px;
-        left: 2px;
+        top: 0;
+        left: 0;
         font-size: 10px;
         font-weight: 700;
-        color: #ffd479;
-        background: rgba(0, 0, 0, 0.7);
-        border-radius: 4px;
-        padding: 0 3px;
+        color: #0a0b0d;
+        background: var(--accent);
+        padding: 0 4px;
+      }
+      .owned-bar {
+        display: flex;
+        gap: 0;
+        border: 1px solid var(--line);
+        margin-bottom: 20px;
+      }
+      .owned-cell {
+        flex: 1;
+        padding: 9px 14px;
+        border-right: 1px solid var(--line);
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 1.2px;
+      }
+      .owned-cell:last-child {
+        border-right: none;
+      }
+      .owned-cell b {
+        display: block;
+        font-size: 20px;
+        color: var(--text);
+        margin-top: 3px;
+        letter-spacing: 0;
       }
     </style>
   </head>
@@ -55,7 +83,16 @@
     <div class="card">
       <div class="card-header">
         <div class="card-title">干员图鉴</div>
-        <div class="card-subtitle">已持有 {{ roster.owned }} / {{ roster.total }}</div>
+        <div class="card-subtitle">Operator Roster</div>
+      </div>
+      <div class="stripes"></div>
+
+      <div class="owned-bar">
+        <div class="owned-cell">已持有<b>{{ roster.owned }}</b></div>
+        <div class="owned-cell">图鉴总数<b>{{ roster.total }}</b></div>
+        <div class="owned-cell">
+          收集率<b>{{ (roster.owned * 100 // roster.total) if roster.total else 0 }}%</b>
+        </div>
       </div>
 
       {% if roster.groups %}
@@ -83,7 +120,7 @@
 
       <div class="card-footer">
         <span>E1 / E2 为精英化阶段，星级为干员稀有度</span>
-        <span>数据来源：森空岛</span>
+        <span>DATA SOURCE / SKLAND</span>
       </div>
     </div>
   </body>

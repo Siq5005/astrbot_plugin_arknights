@@ -4,21 +4,35 @@
     <meta charset="utf-8" />
     <style>
       {{ base_css | safe }}
+      .sanity-block {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        margin: 2px 0 16px;
+      }
       .sanity-value {
-        font-size: 64px;
+        font-size: 76px;
         font-weight: 700;
-        line-height: 1;
-        color: #8fb4ff;
+        line-height: 0.9;
+        color: var(--accent);
+        letter-spacing: -2px;
       }
       .sanity-max {
         font-size: 20px;
-        color: #6c7690;
+        color: var(--muted);
+        font-weight: 600;
       }
-      .sanity-row {
-        display: flex;
-        align-items: baseline;
-        gap: 12px;
-        margin-bottom: 14px;
+      .sanity-state {
+        margin-left: auto;
+        font-size: 13px;
+        letter-spacing: 2px;
+        padding: 5px 14px;
+        border: 1px solid var(--accent);
+        color: var(--accent);
+      }
+      .sanity-state.waiting {
+        border-color: var(--line);
+        color: var(--label);
       }
     </style>
   </head>
@@ -28,23 +42,27 @@
         <div class="card-title">理智</div>
         <div class="card-subtitle">{{ sanity.nickname or "未知博士" }}</div>
       </div>
+      <div class="stripes"></div>
 
-      <div class="section">
-        <div class="sanity-row">
-          <span class="sanity-value">{{ sanity.current }}</span>
-          <span class="sanity-max">/ {{ sanity.max }}</span>
-        </div>
-        <div class="progress">
-          <div class="progress-fill" style="width: {{ sanity.percent }}%"></div>
-        </div>
+      <div class="sanity-block">
+        <span class="sanity-value">{{ sanity.current }}</span>
+        <span class="sanity-max">/ {{ sanity.max }}</span>
+        <span class="sanity-state {% if not sanity.full %}waiting{% endif %}">
+          {% if sanity.full %}FULL{% else %}RECOVERING{% endif %}
+        </span>
       </div>
 
-      <div class="section">
+      <div class="progress">
+        <div class="progress-fill" style="width: {{ sanity.percent }}%"></div>
+      </div>
+
+      <div class="section" style="margin-top: 20px">
+        <div class="section-title">
+          {% if sanity.full %}状态{% else %}距回满{% endif %}
+        </div>
         <div class="row">
-          <span class="row-label">
-            {% if sanity.full %}状态{% else %}距回满{% endif %}
-          </span>
-          <span class="row-value">{{ sanity.remaining_text }}</span>
+          <span class="row-label">剩余时间</span>
+          <span class="row-value accent">{{ sanity.remaining_text }}</span>
         </div>
         <div class="row">
           <span class="row-label">恢复速率</span>
@@ -53,8 +71,8 @@
       </div>
 
       <div class="card-footer">
-        <span>数据时间：{{ sanity.data_time }}</span>
-        <span>数值由回满时刻反推，可能与游戏内存在秒级差异</span>
+        <span>数据时间 {{ sanity.data_time }}</span>
+        <span>数值由回满时刻反推，可能有秒级差异</span>
       </div>
     </div>
   </body>

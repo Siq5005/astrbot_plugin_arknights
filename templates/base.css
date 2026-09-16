@@ -1,4 +1,21 @@
-/* Shared card styling for every rendered image. */
+/* Rhodes Island terminal card styling.
+   Visual language: near-black industrial panels, amber accent, sharp corners,
+   corner brackets, hazard stripes, wide-tracked small-caps labels. */
+
+:root {
+  --bg: #0a0b0d;
+  --panel: #121317;
+  --panel-alt: #171a1f;
+  --line: #2b2f37;
+  --line-soft: #21242a;
+  --text: #f2f4f7;
+  --label: #8d939e;
+  --muted: #5f656f;
+  --accent: #ffb400;
+  --accent-dim: #7a5600;
+  --danger: #ff5252;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -8,67 +25,118 @@
 body {
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC",
     "Source Han Sans SC", "WenQuanYi Micro Hei", sans-serif;
-  background: #10131a;
-  color: #e8ecf4;
+  background: var(--bg);
+  color: var(--text);
   display: inline-block;
 }
 
 .card {
   width: 900px;
-  padding: 28px 32px 24px;
-  background: linear-gradient(160deg, #1b2030 0%, #14181f 100%);
-  border-radius: 18px;
-  border: 1px solid #2a3145;
+  padding: 30px 34px 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
   position: relative;
   overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Corner brackets — the signature Arknights frame detail. */
+.card::before,
+.card::after {
+  content: "";
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  pointer-events: none;
 }
 
 .card::before {
-  content: "";
-  position: absolute;
   top: 0;
   left: 0;
+  border-top: 2px solid var(--accent);
+  border-left: 2px solid var(--accent);
+}
+
+.card::after {
+  bottom: 0;
   right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #4f8cff 0%, #7b5cff 100%);
+  border-bottom: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
 }
 
 .card-header {
   display: flex;
-  align-items: baseline;
+  align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 20px;
+  gap: 16px;
+  padding-bottom: 12px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Thick amber slab to the left of every card title. */
+.card-title::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 24px;
+  margin-right: 12px;
+  background: var(--accent);
+  vertical-align: -3px;
 }
 
 .card-title {
-  font-size: 26px;
+  font-size: 27px;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
 }
 
 .card-subtitle {
-  font-size: 13px;
-  color: #7f8aa3;
+  font-size: 12px;
+  color: var(--label);
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  padding-bottom: 4px;
+}
+
+/* Hazard stripe separator. */
+.stripes {
+  height: 6px;
+  margin: 0 0 18px;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--accent) 0 7px,
+    transparent 7px 16px
+  );
+  opacity: 0.55;
 }
 
 .section {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .section-title {
-  font-size: 14px;
-  color: #4f8cff;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 2.4px;
   margin-bottom: 10px;
-  letter-spacing: 1px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.section-title::before {
+  content: "// ";
+  color: var(--accent-dim);
 }
 
 .row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 0;
-  border-bottom: 1px dashed #232a3a;
+  gap: 16px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--line-soft);
   font-size: 15px;
 }
 
@@ -77,30 +145,41 @@ body {
 }
 
 .row-label {
-  color: #98a3ba;
+  color: var(--label);
+  letter-spacing: 0.6px;
+  flex: none;
 }
 
 .row-value {
   font-weight: 600;
+  color: var(--text);
+  text-align: right;
+}
+
+.row-value.accent {
+  color: var(--accent);
 }
 
 .stars {
-  color: #ffb347;
+  color: var(--accent);
   letter-spacing: 1px;
 }
 
 .progress {
-  height: 10px;
-  border-radius: 6px;
-  background: #232a3a;
+  height: 6px;
+  background: #1d2027;
   overflow: hidden;
-  margin-top: 6px;
+  margin: 7px 0 13px;
+  position: relative;
 }
 
 .progress-fill {
   height: 100%;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #4f8cff 0%, #7b5cff 100%);
+  background: var(--accent);
+}
+
+.progress-fill.dim {
+  background: #6b5426;
 }
 
 .grid {
@@ -110,57 +189,60 @@ body {
 }
 
 .tile {
-  width: 76px;
+  width: 74px;
   text-align: center;
 }
 
 .tile img {
   width: 68px;
   height: 68px;
-  border-radius: 10px;
-  border: 1px solid #2a3145;
-  background: #1a1f2b;
+  border: 1px solid var(--line);
+  background: var(--panel-alt);
   display: block;
+  filter: saturate(0.94);
 }
 
 .tile .name {
   font-size: 11px;
   margin-top: 4px;
-  color: #c3cbdd;
+  color: var(--label);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .card-footer {
-  margin-top: 16px;
-  padding-top: 10px;
-  border-top: 1px solid #232a3a;
-  font-size: 12px;
-  color: #6c7690;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted);
   display: flex;
   justify-content: space-between;
+  letter-spacing: 0.8px;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 12px 2px;
 }
 
 .help-grid {
   column-count: 2;
-  column-gap: 28px;
+  column-gap: 32px;
 }
 
 .help-command {
   font-size: 14px;
-  color: #8fb4ff;
+  font-weight: 600;
+  color: var(--accent);
   font-family: Menlo, Consolas, monospace;
+  letter-spacing: 0.4px;
 }
 
 .help-desc {
-  font-size: 13px;
-  color: #98a3ba;
-  margin-bottom: 6px;
-}
-
-.empty {
-  color: #6c7690;
-  font-size: 14px;
-  padding: 12px 0;
+  font-size: 12.5px;
+  color: var(--label);
+  margin-bottom: 9px;
 }
