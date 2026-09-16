@@ -27,6 +27,17 @@ logger = logging.getLogger(__name__)
 ASSET_PATTERN = re.compile(r"__ASSET__/([A-Za-z0-9_./-]+)")
 CACHE_MAX_AGE_SECONDS = 300
 
+# Per-card decoration themes, keyed by template file name. The renderer injects
+# the class so neither the templates' call sites nor main.py has to track it.
+CARD_THEMES: dict[str, str] = {
+    "gacha.html": "t-gacha",
+    "announce.html": "t-announce",
+    "announce_detail.html": "t-announce",
+    "building.html": "t-building",
+    "rogue.html": "t-rogue",
+    "operator_list.html": "t-roster",
+}
+
 # Preferred device pixel ratio, and Chromium's hard screenshot texture limit.
 DEVICE_SCALE_FACTOR = 2.0
 MAX_TEXTURE_PX = 16384
@@ -158,8 +169,12 @@ class Renderer:
             caller is expected to fall back to a text reply.
         """
         try:
+            # the decoration theme follows the template, so callers only supply
+            # their own data
+            render_data = dict(data or {})
+            render_data["card_class"] = CARD_THEMES.get(template_name, "")
             html = self._inline_assets(
-                self._env.get_template(template_name).render(**data)
+                self._env.get_template(template_name).render(**render_data)
             )
         except Exception as exc:  # noqa: BLE001 - template errors degrade to text
             logger.error("渲染模板 %s 失败: %s", template_name, exc)

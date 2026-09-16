@@ -30,14 +30,97 @@ body {
   display: inline-block;
 }
 
+/* Decoration is layered rather than a single flat colour. Every layer is CSS or
+   an inline SVG, so it stays sharp at any DPI, tiles over any card height, and
+   adds nothing to the repository.
+   Paint order is front to back: watermark, grid, glow, starfield, vignette. */
 .card {
   width: 900px;
   padding: 30px 34px 24px;
-  background: var(--panel);
   border: 1px solid var(--line);
   position: relative;
   overflow: hidden;
   font-variant-numeric: tabular-nums;
+
+  --grid-line: rgba(255, 255, 255, 0.022);
+  --grid-pitch: 34px;
+  --glow-color: rgba(255, 180, 0, 0.06);
+  --glow-at: 4% -6%;
+  --vignette: rgba(0, 0, 0, 0.42);
+  --wm-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20120%20100%22%3E%3Cg%20fill%3D%22%23FFB400%22%20fill-opacity%3D%220.07%22%3E%3Crect%20x%3D%2226%22%20y%3D%2244%22%20width%3D%228%22%20height%3D%2220%22%2F%3E%3Crect%20x%3D%2241%22%20y%3D%2232%22%20width%3D%228%22%20height%3D%2232%22%2F%3E%3Crect%20x%3D%2256%22%20y%3D%2220%22%20width%3D%228%22%20height%3D%2244%22%2F%3E%3Crect%20x%3D%2282%22%20y%3D%2214%22%20width%3D%227%22%20height%3D%2250%22%2F%3E%3C%2Fg%3E%3Cg%20stroke%3D%22%23FFB400%22%20stroke-opacity%3D%220.07%22%20stroke-width%3D%227%22%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M24%2084l12-10M44%2084l12-10M64%2084l12-10M84%2084l12-10%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+  --wm-size: 430px 430px;
+  --wm-pos: right -90px top 26%;
+  --stars: none;
+
+  background-color: var(--panel);
+  background-image:
+    var(--wm-image),
+    var(--stars),
+    repeating-linear-gradient(
+      0deg,
+      var(--grid-line) 0 1px,
+      transparent 1px var(--grid-pitch)
+    ),
+    repeating-linear-gradient(
+      90deg,
+      var(--grid-line) 0 1px,
+      transparent 1px var(--grid-pitch)
+    ),
+    radial-gradient(circle at var(--glow-at), var(--glow-color), transparent 55%),
+    radial-gradient(150% 62% at 50% 0%, transparent 40%, var(--vignette));
+  background-repeat: no-repeat, repeat, repeat, repeat, no-repeat, no-repeat;
+  background-size: var(--wm-size), 190px 190px, auto, auto, auto, auto;
+  background-position: var(--wm-pos), 0 0, 0 0, 0 0, 0 0, 0 0;
+  opacity: 1;
+}
+
+/* The watermark is a background layer, so its own alpha cannot be dialled down
+   without affecting the other layers; blending it into the panel keeps it a
+   whisper while the text above stays untouched. */
+.card::before,
+.card::after {
+  z-index: 0;
+}
+
+/* ---- per-card themes ------------------------------------------------ */
+/* 抽卡：星空 + 星形水印 */
+.card.t-gacha {
+  --stars:
+    radial-gradient(1.6px 1.6px at 26px 34px, rgba(255, 255, 255, 0.34), transparent),
+    radial-gradient(1.1px 1.1px at 118px 96px, rgba(255, 255, 255, 0.24), transparent),
+    radial-gradient(1.4px 1.4px at 74px 152px, rgba(255, 180, 0, 0.3), transparent),
+    radial-gradient(1px 1px at 158px 28px, rgba(255, 255, 255, 0.2), transparent);
+  --wm-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Cpath%20d%3D%22M50%2012l9%2026h28l-23%2017%209%2027-23-17-23%2017%209-27-23-17h28z%22%20fill%3D%22none%22%20stroke%3D%22%23FFB400%22%20stroke-opacity%3D%220.075%22%20stroke-width%3D%225%22%2F%3E%3C%2Fsvg%3E");
+  --wm-size: 340px 340px;
+  --wm-pos: right -50px top 30%;
+  --glow-color: rgba(255, 180, 0, 0.1);
+}
+
+/* 公告：偏冷的文档感，水印压得更淡 */
+.card.t-announce {
+  --grid-line: rgba(200, 220, 255, 0.02);
+  --glow-color: rgba(120, 160, 220, 0.05);
+  --wm-size: 380px 380px;
+  --wm-pos: left -70px top 42%;
+}
+
+/* 基建：工业格栅更明显 */
+.card.t-building {
+  --grid-pitch: 26px;
+  --grid-line: rgba(255, 255, 255, 0.03);
+}
+
+/* 集成战略：更暗、更压抑 */
+.card.t-rogue {
+  --vignette: rgba(0, 0, 0, 0.62);
+  --glow-color: rgba(255, 180, 0, 0.035);
+  --grid-line: rgba(255, 255, 255, 0.014);
+}
+
+/* 干员图鉴：网格更淡，避免和干员头像抢注意力 */
+.card.t-roster {
+  --grid-line: rgba(255, 255, 255, 0.016);
+  --wm-size: 380px 380px;
 }
 
 /* Corner brackets — the signature Arknights frame detail. */
@@ -298,4 +381,52 @@ body {
 .tick.right {
   left: auto;
   right: 0;
+}
+
+
+/* ---- section-level decoration --------------------------------------- */
+/* A hairline amber gradient on the panel's left edge gives the eye a rhythm
+   down a tall card without a full-card texture competing with the text. */
+.panel {
+  position: relative;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 180, 0, 0.035) 0%,
+    rgba(255, 180, 0, 0) 22%
+  );
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    var(--accent) 0%,
+    rgba(255, 180, 0, 0.25) 55%,
+    rgba(255, 180, 0, 0) 100%
+  );
+}
+
+/* A single scan line under the header, echoing a terminal readout. */
+.card-header {
+  position: relative;
+}
+
+.card-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 180, 0, 0.5) 0%,
+    rgba(255, 180, 0, 0.06) 40%,
+    transparent 100%
+  );
 }
