@@ -26,6 +26,12 @@ from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
 from .core.cards import build_note_context, build_sanity_context
 from .core.hypergryph import HypergryphClient, HypergryphError
+from .core.operators import (
+    build_operator_context,
+    build_roster_context,
+    find_operator,
+    group_operators,
+)
 from .core.render import Renderer
 from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
@@ -970,3 +976,106 @@ class ArknightsPlugin(Star):
             else:
                 self._sanity_notified[user_key] = False
             await asyncio.sleep(3 + random.random() * 3)
+
+    # ── operator queries ──────────────────────────────────────────────────
+
+    @filter.command("干员列表", alias={"干员图鉴"})
+    async def show_roster(self, event: AstrMessageEvent):
+        """Show the owned-operator roster card."""
+        resolved = await self._resolve_binding(event)
+        if not resolved:
+            yield event.plain_result(NO_BINDING_TEXT)
+            return
+        user, binding = resolved
+        try:
+            data = await self._player_data(user, binding)
+        except SklandError as exc:
+            yield event.plain_result(await self._report_query_error(event, exc))
+            return
+        char_info = data.get("charInfoMap") or {}
+        groups = group_operators(data.get("chars") or [], char_info)
+        roster = build_roster_context(groups, char_info)
+        image = await self._render("operator_list.html", {"roster": roster})
+        if image is None:
+            summary = "、".join(
+                f"{group['profession_cn']} {len(group['operators'])}"
+                for group in groups
+            )
+            yield event.plain_result(
+                f"已持有干员 {roster['owned']} / {roster['total']}。\n{summary}"
+            )
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    @filter.regex(r"^\s*(.+?)\s*面板\s*$")
+    async def show_operator(self, event: AstrMessageEvent):
+        """Show the detail card for one owned operator."""
+        text = (event.message_str or "").strip()
+        name = text[: -len("面板")].strip() if text.endswith("面板") else text
+        # Strip any command prefix the user typed, e.g. /阿米娅面板
+        name = name.lstrip("/!#。．,，、:： ").strip()
+        resolved = await self._resolve_binding(event)
+        if not resolved:
+            # Without a binding stay quiet in groups so that any message ending
+            # in 面板 does not trigger a reply.
+            if event.is_private_chat():
+                yield event.plain_result(NO_BINDING_TEXT)
+            return
+        user, binding = resolved
+        try:
+            data = await self._player_data(user, binding)
+        except SklandError as exc:
+            yield event.plain_result(await self._report_query_error(event, exc))
+            return
+        operator = find_operator(
+            data.get("chars") or [], data.get("charInfoMap") or {}, name
+        )
+        if operator is None:
+            yield event.plain_result(
+                f"未找到干员「{name}」。发送 `干员列表` 可查看已持有的干员。"
+            )
+            return
+        context = build_operator_context(operator, data.get("equipmentInfoMap") or {})
+        image = await self._render("operator.html", {"op": context})
+        if image is None:
+            yield event.plain_result(self._operator_text(context))
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    @staticmethod
+    def _operator_text(context: dict[str, Any]) -> str:
+        """Build the plain text fallback for the operator card.
+
+        Args:
+            context: Context produced by ``build_operator_context``.
+
+        Returns:
+            Multi-line summary text.
+        """
+        lines = [
+            f"{context['name']} {'★' * context['stars']} · {context['profession_cn']}",
+            f"等级 {context['level']} · 精英 {context['elite']} · "
+            f"潜能 {context['potential']} · 信赖 {context['favor']}%",
+        ]
+        if context["skills"]:
+            lines.append(
+                "技能："
+                + "、".join(
+                    f"{index} "
+                    + (
+                        f"专精{skill['specialize']}"
+                        if skill["specialize"]
+                        else "未专精"
+                    )
+                    for index, skill in enumerate(context["skills"], 1)
+                )
+            )
+        if context["equips"]:
+            lines.append(
+                "模组："
+                + "、".join(
+                    f"{equip['name']} Lv.{equip['level']}"
+                    for equip in context["equips"]
+                )
+            )
+        return "\n".join(lines)

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+      .roster-group {
+        margin-bottom: 14px;
+      }
+      .roster-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .roster-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: #4f8cff;
+        letter-spacing: 1px;
+      }
+      .roster-count {
+        font-size: 12px;
+        color: #6c7690;
+      }
+      .tile {
+        position: relative;
+        width: 70px;
+      }
+      .tile img {
+        width: 64px;
+        height: 64px;
+      }
+      .tile .stars {
+        font-size: 10px;
+        color: #ffb347;
+        text-align: center;
+        line-height: 12px;
+        letter-spacing: -1px;
+      }
+      .tile .elite {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        font-size: 10px;
+        font-weight: 700;
+        color: #ffd479;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 4px;
+        padding: 0 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">干员图鉴</div>
+        <div class="card-subtitle">已持有 {{ roster.owned }} / {{ roster.total }}</div>
+      </div>
+
+      {% if roster.groups %}
+      {% for group in roster.groups %}
+      <div class="roster-group">
+        <div class="roster-head">
+          <span class="roster-name">{{ group.profession_cn }}</span>
+          <span class="roster-count">{{ group.operators | length }}</span>
+        </div>
+        <div class="grid">
+          {% for op in group.operators %}
+          <div class="tile">
+            <img src="{{ op.avatar }}" alt="{{ op.name }}" />
+            {% if op.elite %}<span class="elite">E{{ op.elite }}</span>{% endif %}
+            <div class="stars">{{ "★" * op.stars }}</div>
+            <div class="name">{{ op.name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="empty">没有查询到已持有的干员。</div>
+      {% endif %}
+
+      <div class="card-footer">
+        <span>E1 / E2 为精英化阶段，星级为干员稀有度</span>
+        <span>数据来源：森空岛</span>
+      </div>
+    </div>
+  </body>
+</html>

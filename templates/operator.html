@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+      .detail {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+      .detail-portrait {
+        width: 300px;
+        flex: none;
+      }
+      .detail-portrait img {
+        width: 300px;
+        height: 380px;
+        object-fit: cover;
+        object-position: center top;
+        border-radius: 14px;
+        border: 1px solid #2a3145;
+        background: #1a1f2b;
+        display: block;
+      }
+      .detail-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .detail-name {
+        font-size: 30px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .detail-meta {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .badge {
+        font-size: 12px;
+        padding: 2px 10px;
+        border-radius: 999px;
+        border: 1px solid #2a3145;
+        color: #98a3ba;
+      }
+      .skill-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 0;
+        border-bottom: 1px dashed #232a3a;
+        font-size: 14px;
+      }
+      .skill-row:last-child {
+        border-bottom: none;
+      }
+      .skill-row img {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        border: 1px solid #2a3145;
+        background: #1a1f2b;
+      }
+      .skill-name {
+        flex: 1;
+        color: #c3cbdd;
+        font-family: Menlo, Consolas, monospace;
+        font-size: 12px;
+      }
+      .mark {
+        font-size: 11px;
+        color: #ffd479;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="detail">
+        <div class="detail-portrait">
+          <img src="{{ op.portrait or op.avatar }}" alt="{{ op.name }}" />
+        </div>
+        <div class="detail-body">
+          <div class="detail-name">{{ op.name }}</div>
+          <div class="detail-meta">
+            <span class="stars">{{ "★" * op.stars }}</span>
+            <span class="badge">{{ op.profession_cn }}</span>
+            <span class="badge">
+              {% if op.elite %}精英 {{ op.elite }}{% else %}未精英化{% endif %}
+            </span>
+            <span class="badge">潜能 {{ op.potential }}</span>
+          </div>
+
+          <div class="section">
+            <div class="section-title">培养</div>
+            <div class="row">
+              <span class="row-label">等级</span>
+              <span class="row-value">{{ op.level }}</span>
+            </div>
+            <div class="row">
+              <span class="row-label">信赖</span>
+              <span class="row-value">{{ op.favor }}%</span>
+            </div>
+            <div class="progress">
+              <div class="progress-fill" style="width: {{ op.favor_percent }}%"></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">技能</div>
+            {% if op.skills %}
+            {% for skill in op.skills %}
+            <div class="skill-row">
+              {% if skill.icon %}<img src="{{ skill.icon }}" alt="{{ skill.id }}" />{% endif %}
+              <span class="skill-name">{{ skill.id }}</span>
+              {% if skill.is_default %}<span class="mark">默认</span>{% endif %}
+              <span class="row-value">
+                {% if skill.specialize %}专精 {{ skill.specialize }}{% else %}未专精{% endif %}
+              </span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty">暂无技能数据</div>
+            {% endif %}
+          </div>
+
+          <div class="section">
+            <div class="section-title">模组</div>
+            {% if op.equips %}
+            {% for equip in op.equips %}
+            <div class="row">
+              <span class="row-label">{{ equip.name }}</span>
+              <span class="row-value">Lv.{{ equip.level }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty">未装配模组</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="card-footer">
+        <span>数据来源：森空岛（上次同步快照）</span>
+        <span>罗德岛终端</span>
+      </div>
+    </div>
+  </body>
+</html>
