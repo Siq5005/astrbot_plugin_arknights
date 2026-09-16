@@ -212,3 +212,30 @@ def skin_portrait(skin_id: str) -> str:
     else:
         stem = skin_id.replace("#", "_", 1)
     return f"{RESOURCE_BASE}/skin/{_quote(stem)}b.png"
+
+
+def secretary_portrait(char_id: str, skin_id: str = "") -> str:
+    """Return the artwork to show for an assistant (助理) operator.
+
+    The assistant record always carries a skin id, and the promotion outfits use
+    the form ``{charId}#1`` / ``{charId}#2``, which map onto the plain promotion
+    portraits. Anything else is a named outfit and resolves through
+    :func:`skin_portrait`.
+
+    Args:
+        char_id: Internal operator id.
+        skin_id: Skin the operator is currently wearing.
+
+    Returns:
+        Absolute image URL.
+    """
+    char_id = str(char_id or "")
+    skin_id = str(skin_id or "")
+    if not char_id:
+        return ""
+    if not skin_id:
+        return char_portrait(char_id, 2)
+    if skin_id.startswith(f"{char_id}#"):
+        phase = skin_id.rsplit("#", 1)[-1]
+        return char_portrait(char_id, int(phase) if phase.isdigit() else 2)
+    return skin_portrait(skin_id)

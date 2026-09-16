@@ -15,7 +15,12 @@
         padding-bottom: 5px;
         border-bottom: 1px solid var(--line-soft);
       }
-      .roster-name {
+      .roster-head img {
+        width: 20px;
+        height: 20px;
+        flex: none;
+    }
+    .roster-name {
         font-size: 13px;
         font-weight: 700;
         color: var(--accent);
@@ -99,6 +104,9 @@
       {% for group in roster.groups %}
       <div class="roster-group">
         <div class="roster-head">
+          {% if group.operators[0].profession_icon %}
+          <img src="{{ group.operators[0].profession_icon }}" alt="" />
+          {% endif %}
           <span class="roster-name">{{ group.profession_cn }}</span>
           <span class="roster-count">{{ group.operators | length }}</span>
         </div>

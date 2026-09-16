@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .assets import char_avatar
+from .assets import char_avatar, facility_icon
 from .cards import format_remaining, format_timestamp, progress_node
 
 # The API reports facility mood as ``ap``; a full 24 mood equals 8_640_000.
@@ -127,7 +127,14 @@ def build_building_context(data: dict[str, Any]) -> dict[str, Any]:
     ):
         slots = _slots_of(building.get(source), char_info)
         if slots:
-            facilities.append({"key": key, "name": label, "slots": slots})
+            facilities.append(
+                {
+                    "key": key,
+                    "name": label,
+                    "icon": facility_icon(key),
+                    "slots": slots,
+                }
+            )
 
     labor = building.get("labor") or {}
     labor_value = int(labor.get("value") or 0)

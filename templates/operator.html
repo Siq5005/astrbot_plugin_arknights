@@ -58,6 +58,16 @@
         margin: 12px 0 20px;
         flex-wrap: wrap;
       }
+      .detail-meta img.rank {
+        height: 17px;
+      }
+      .detail-meta img.cls {
+        width: 26px;
+        height: 26px;
+      }
+      .detail-meta img.mark {
+        height: 20px;
+      }
       .badge {
         font-size: 11px;
         letter-spacing: 1.4px;
@@ -113,12 +123,23 @@
         <div class="detail-body">
           <div class="detail-name">{{ op.name }}</div>
           <div class="detail-meta">
+            {% if op.rarity_icon %}
+            <img class="rank" src="{{ op.rarity_icon }}" alt="{{ op.stars }}星" />
+            {% else %}
             <span class="stars">{{ "★" * op.stars }}</span>
+            {% endif %}
+            {% if op.profession_icon %}
+            <img class="cls" src="{{ op.profession_icon }}" alt="{{ op.profession_cn }}" />
+            {% endif %}
             <span class="badge">{{ op.profession_cn }}</span>
-            <span class="badge">
-              {% if op.elite %}精英 {{ op.elite }}{% else %}未精英化{% endif %}
-            </span>
-            <span class="badge">潜能 {{ op.potential }}</span>
+            {% if op.elite_icon and op.elite %}
+            <img class="mark" src="{{ op.elite_icon }}" alt="精英{{ op.elite }}" />
+            {% elif not op.elite %}
+            <span class="badge">未精英化</span>
+            {% endif %}
+            {% if op.potential_icon %}
+            <img class="mark" src="{{ op.potential_icon }}" alt="潜能{{ op.potential }}" />
+            {% endif %}
             <span class="badge hot">信赖 {{ op.favor }}%</span>
           </div>
 

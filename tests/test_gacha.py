@@ -20,7 +20,9 @@ def test_format_record_time():
     assert format_record_time(0) == ""
     assert format_record_time(None) == ""
     assert format_record_time("junk") == ""
-    assert len(format_record_time(1700000000)) == 11
+    # includes the year, because a record set can span several years
+    assert len(format_record_time(1700000000)) == 16
+    assert format_record_time(1700000000).count("-") == 2
 
 
 @pytest.mark.anyio

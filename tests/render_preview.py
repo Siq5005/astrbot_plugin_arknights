@@ -71,6 +71,8 @@ PLAYER = {
         "storeTs": int(NOW) - 900,
         "charCnt": 0,
         "skinCnt": 0,
+        "resume": "罗德岛终端测试签名 —— 数据来自森空岛官方接口的快照。",
+        "secretary": {"charId": "char_1012_skadi2", "skinId": "char_1012_skadi2#2"},
         "ap": {"current": 88, "max": 135, "completeRecoveryTime": int(NOW) + 4200},
     },
     "chars": CHARS,

@@ -32,6 +32,12 @@
         color: var(--muted);
         font-weight: 400;
       }
+      .section-title img {
+        width: 19px;
+        height: 19px;
+        vertical-align: -4px;
+        margin-right: 7px;
+      }
       .slot {
         display: flex;
         align-items: center;
@@ -146,7 +152,10 @@
 
       {% for facility in building.facilities %}
       <div class="section">
-        <div class="section-title">{{ facility.name }}</div>
+        <div class="section-title">
+          {% if facility.icon %}<img src="{{ facility.icon }}" alt="" />{% endif
+          %}{{ facility.name }}
+        </div>
         {% for slot in facility.slots %}
         <div class="slot">
           <div class="slot-level">Lv.{{ slot.level }}</div>

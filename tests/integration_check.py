@@ -112,6 +112,9 @@ EXPECTED_COMMANDS = {
     "方舟公招",
     "方舟抽卡分析",
     "方舟抽卡记录",
+    "方舟公告",
+    "方舟订阅公告",
+    "方舟取消订阅公告",
 }
 
 # Commands registered by astrbot_plugin_endfield that must never be claimed by
@@ -410,6 +413,90 @@ async def main() -> int:
         PLUGIN_ROOT / "templates", Path("/tmp/ak-integration/cache"), 30000
     )
     plugin._renderer = renderer
+
+    # ── 公告：列表出图、按编号看正文、失败给出明确提示 ──
+    ANNOUNCE_FIXTURE = [
+        {
+            "id": "2069",
+            "title": "05月08日 闪断更新公告",
+            "group": "SYSTEM",
+            "group_cn": "系统",
+            "url": "https://example.invalid/2069.html",
+            "ts": 1746619406,
+            "date_text": "2025-05-08 02:03",
+        },
+        {
+            "id": "2068",
+            "title": "【布道自由】 限定寻访开启",
+            "group": "ACTIVITY",
+            "group_cn": "活动",
+            "url": "https://example.invalid/2068.html",
+            "ts": 1746074007,
+            "date_text": "2025-05-01 17:53",
+        },
+    ]
+
+    async def fake_announce():
+        return ANNOUNCE_FIXTURE
+
+    async def fake_focus():
+        return "2068"
+
+    async def fake_detail(url, limit=1200):
+        return "公告正文摘要"
+
+    plugin._announce.fetch = fake_announce
+    plugin._announce.focus_id = fake_focus
+    plugin._announce.detail = fake_detail
+
+    results = await drive(plugin.show_announcements(StubEvent("/方舟公告")))
+    check(
+        "方舟公告 renders a card",
+        results and results[0][0] == "chain" and Path(results[0][1][0].path).is_file(),
+    )
+
+    results = await drive(plugin.show_announcements(StubEvent("/方舟公告 2068")))
+    check(
+        "方舟公告 <编号> returns the body",
+        results and "公告正文摘要" in results[0][1] and "2068" in results[0][1],
+    )
+
+    results = await drive(plugin.show_announcements(StubEvent("/方舟公告 9999")))
+    check(
+        "方舟公告 with an unknown id says so",
+        results and "没有找到" in results[0][1],
+    )
+
+    async def failing_announce():
+        # must be the class the plugin itself catches: the harness imports
+        # ``core.announce`` on a separate path from the plugin's own
+        # ``.core.announce``, and the two are distinct class objects.
+        raise plugin_module.AnnounceError("网络不可用")
+
+    plugin._announce.fetch = failing_announce
+    results = await drive(plugin.show_announcements(StubEvent("/方舟公告")))
+    check(
+        "方舟公告 reports a feed failure",
+        results and "公告获取失败" in results[0][1],
+    )
+    plugin._announce.fetch = fake_announce
+
+    results = await drive(plugin.subscribe_announce(StubEvent("/方舟订阅公告")))
+    check(
+        "方舟订阅公告 confirms in private",
+        results and "已订阅" in results[0][1],
+    )
+    results = await drive(
+        plugin.subscribe_announce(StubEvent("/方舟订阅公告", private=False))
+    )
+    check(
+        "方舟订阅公告 refuses in a group",
+        results and "私聊" in results[0][1],
+    )
+    subs = await plugin.store.list_announce_subs()
+    check("公告订阅已落库", len(subs) == 1, f"{subs}")
+    await plugin.unsubscribe_announce(StubEvent("/方舟取消订阅公告")).__anext__()
+    check("公告订阅可取消", not await plugin.store.list_announce_subs())
 
     async def fake_authorization(token: str) -> str:
         return "auth-code"

@@ -27,5 +27,11 @@
     "type": "int",
     "default": 5,
     "hint": "0 表示不限制"
+  },
+  "announce_poll_interval": {
+    "description": "公告订阅轮询间隔(分钟)",
+    "type": "int",
+    "default": 30,
+    "hint": "开了公告订阅后，按该间隔检查是否有新公告；建议 15-60"
   }
 }

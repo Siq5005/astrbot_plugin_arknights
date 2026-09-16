@@ -25,35 +25,114 @@
         font-size: 23px;
         margin-left: 7px;
       }
+      .body {
+        display: flex;
+        gap: 22px;
+        align-items: flex-start;
+      }
+      .assistant {
+        width: 268px;
+        flex: none;
+      }
+      .assistant-art {
+        position: relative;
+        border: 1px solid var(--line);
+        background: radial-gradient(
+            circle at 50% 18%,
+            rgba(255, 180, 0, 0.13) 0%,
+            rgba(255, 180, 0, 0) 62%
+          ),
+          linear-gradient(180deg, #1d222b 0%, #0e1013 100%);
+        height: 396px;
+        overflow: hidden;
+      }
+      /* contain keeps the whole half-body artwork visible instead of cropping
+         it to a narrow column */
+      .assistant-art img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: center bottom;
+        display: block;
+      }
+      .assistant-art::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 58px;
+        height: 5px;
+        background: var(--accent);
+      }
+      .assistant-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 9px;
+      }
+      .assistant-meta img.cls {
+        width: 26px;
+        height: 26px;
+        flex: none;
+      }
+      .assistant-meta img.rank {
+        height: 19px;
+        flex: none;
+      }
+      .assistant-name {
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+      }
+      .assistant-role {
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 1.6px;
+      }
+      .signature {
+        margin-top: 9px;
+        padding: 9px 11px;
+        border-left: 2px solid var(--line);
+        background: #14161b;
+        font-size: 12px;
+        color: var(--label);
+        line-height: 1.55;
+        max-height: 82px;
+        overflow: hidden;
+      }
+      .right {
+        flex: 1;
+        min-width: 0;
+      }
       .stat-strip {
         display: flex;
-        margin: 4px 0 20px;
+        margin-bottom: 18px;
         border: 1px solid var(--line);
       }
       .stat-cell {
         flex: 1;
-        padding: 10px 14px;
+        padding: 9px 12px;
         border-right: 1px solid var(--line);
       }
       .stat-cell:last-child {
         border-right: none;
       }
       .stat-key {
-        font-size: 11px;
+        font-size: 10.5px;
         color: var(--muted);
-        letter-spacing: 1.4px;
+        letter-spacing: 1.3px;
       }
       .stat-val {
-        font-size: 19px;
+        font-size: 18px;
         font-weight: 700;
         margin-top: 4px;
       }
       .assist-op {
-        width: 84px;
+        width: 76px;
       }
       .assist-op img {
-        width: 78px;
-        height: 78px;
+        width: 70px;
+        height: 70px;
       }
     </style>
   </head>
@@ -67,54 +146,85 @@
       </div>
       <div class="stripes"></div>
 
-      <div class="stat-strip">
-        <div class="stat-cell">
-          <div class="stat-key">入职日期</div>
-          <div class="stat-val">{{ note.register_date }}</div>
+      <div class="body">
+        <div class="assistant">
+          <div class="assistant-art">
+            {% if note.secretary.portrait %}
+            <img src="{{ note.secretary.portrait }}" alt="{{ note.secretary.name }}" />
+            {% endif %}
+          </div>
+          <div class="assistant-meta">
+            {% if note.secretary.profession_icon %}
+            <img class="cls" src="{{ note.secretary.profession_icon }}" alt="" />
+            {% endif %}
+            {% if note.secretary.rarity_icon %}
+            <img class="rank" src="{{ note.secretary.rarity_icon }}" alt="" />
+            {% endif %}
+            <span class="assistant-name">{{ note.secretary.name or "未设置助理" }}</span>
+          </div>
+          <div class="assistant-role">ASSISTANT</div>
+          {% if note.signature %}
+          <div class="signature">{{ note.signature }}</div>
+          {% endif %}
         </div>
-        <div class="stat-cell">
-          <div class="stat-key">主线进度</div>
-          <div class="stat-val">{{ note.main_stage }}</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-key">干员 / 时装</div>
-          <div class="stat-val">
-            {{ note.char_count }}<span style="color: var(--muted)"> / </span>{{ note.skin_count }}
+
+        <div class="right">
+          <div class="stat-strip">
+            <div class="stat-cell">
+              <div class="stat-key">入职日期</div>
+              <div class="stat-val">{{ note.register_date }}</div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-key">主线进度</div>
+              <div class="stat-val">{{ note.main_stage }}</div>
+            </div>
+          </div>
+          <div class="stat-strip">
+            <div class="stat-cell">
+              <div class="stat-key">干员数</div>
+              <div class="stat-val">{{ note.char_count }}</div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-key">时装数</div>
+              <div class="stat-val">{{ note.skin_count }}</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">理智</div>
+            <div class="row">
+              <span class="row-label">当前</span>
+              <span class="row-value accent">
+                {{ note.sanity.current }}
+                <span style="color: var(--muted); font-weight: 400">
+                  / {{ note.sanity.max }}
+                </span>
+              </span>
+            </div>
+            <div class="progress">
+              <div class="progress-fill" style="width: {{ note.sanity.percent }}%"></div>
+            </div>
+            <div class="row" style="border-bottom: none">
+              <span class="row-label">恢复</span>
+              <span class="row-value">{{ note.sanity.remaining_text }}</span>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">进度</div>
+            {% for item in [{"label": "每日任务", "node": note.daily},
+                            {"label": "每周任务", "node": note.weekly},
+                            {"label": "剿灭合成玉", "node": note.campaign}] %}
+            <div class="row">
+              <span class="row-label">{{ item.label }}</span>
+              <span class="row-value">{{ item.node.current }} / {{ item.node.total }}</span>
+            </div>
+            <div class="progress">
+              <div class="progress-fill" style="width: {{ item.node.percent }}%"></div>
+            </div>
+            {% endfor %}
           </div>
         </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">理智</div>
-        <div class="row">
-          <span class="row-label">当前</span>
-          <span class="row-value accent">
-            {{ note.sanity.current }}
-            <span style="color: var(--muted); font-weight: 400">/ {{ note.sanity.max }}</span>
-          </span>
-        </div>
-        <div class="progress">
-          <div class="progress-fill" style="width: {{ note.sanity.percent }}%"></div>
-        </div>
-        <div class="row" style="border-bottom: none">
-          <span class="row-label">恢复</span>
-          <span class="row-value">{{ note.sanity.remaining_text }}</span>
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">进度</div>
-        {% for item in [{"label": "每日任务", "node": note.daily},
-                        {"label": "每周任务", "node": note.weekly},
-                        {"label": "剿灭合成玉", "node": note.campaign}] %}
-        <div class="row">
-          <span class="row-label">{{ item.label }}</span>
-          <span class="row-value">{{ item.node.current }} / {{ item.node.total }}</span>
-        </div>
-        <div class="progress">
-          <div class="progress-fill" style="width: {{ item.node.percent }}%"></div>
-        </div>
-        {% endfor %}
       </div>
 
       <div class="section">

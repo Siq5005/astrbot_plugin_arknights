@@ -9,7 +9,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from .assets import char_avatar
+from .assets import (
+    char_avatar,
+    profession_icon,
+    rarity_icon,
+    secretary_portrait,
+)
 from .skland import SANITY_SECONDS_PER_POINT, derive_sanity
 
 UNKNOWN_TEXT = "未知"
@@ -172,9 +177,25 @@ def build_note_context(
             }
         )
 
+    secretary = status.get("secretary") or {}
+    secretary_id = str(secretary.get("charId") or "")
+    secretary_meta = char_info.get(secretary_id) or {}
+
     return {
         "nickname": status.get("name") or "",
         "level": int(status.get("level") or 0),
+        "signature": str(status.get("resume") or "").strip(),
+        "secretary": {
+            "char_id": secretary_id,
+            "name": str(secretary_meta.get("name") or secretary_id),
+            "portrait": secretary_portrait(
+                secretary_id, str(secretary.get("skinId") or "")
+            ),
+            "profession_icon": profession_icon(
+                str(secretary_meta.get("profession") or "")
+            ),
+            "rarity_icon": rarity_icon(int(secretary_meta.get("rarity") or 0) + 1),
+        },
         "register_date": format_date(status.get("registerTs")),
         "main_stage": format_stage(status.get("mainStageProgress")),
         # charCnt/skinCnt are unreliable (observed as 0), so prefer the list sizes.

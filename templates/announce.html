@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+      .ann {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 11px 2px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+      .ann:last-child {
+        border-bottom: none;
+      }
+      .ann-id {
+        flex: none;
+        width: 54px;
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 0.6px;
+        padding-top: 2px;
+      }
+      .ann-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .ann-title {
+        font-size: 15px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      .ann-date {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 3px;
+      }
+      .ann-tag {
+        flex: none;
+        font-size: 10px;
+        letter-spacing: 1.2px;
+        padding: 2px 8px;
+        border: 1px solid var(--line);
+        color: var(--label);
+        margin-top: 1px;
+      }
+      .ann-tag.act {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .ann.focus {
+        background: rgba(255, 180, 0, 0.05);
+      }
+      .ann.focus .ann-title::after {
+        content: " 置顶";
+        font-size: 10px;
+        color: var(--accent);
+        letter-spacing: 1px;
+      }
+      .count {
+        display: flex;
+        border: 1px solid var(--line);
+        margin-bottom: 18px;
+      }
+      .count-cell {
+        flex: 1;
+        padding: 9px 14px;
+        border-right: 1px solid var(--line);
+        font-size: 10.5px;
+        color: var(--muted);
+        letter-spacing: 1.3px;
+      }
+      .count-cell:last-child {
+        border-right: none;
+      }
+      .count-cell b {
+        display: block;
+        font-size: 20px;
+        color: var(--text);
+        margin-top: 3px;
+        letter-spacing: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">官方公告</div>
+        <div class="card-subtitle">Announcements</div>
+      </div>
+      <div class="stripes"></div>
+
+      <div class="count">
+        <div class="count-cell">公告总数<b>{{ announce.total }}</b></div>
+        <div class="count-cell">活动类<b>{{ announce.activity_count }}</b></div>
+        <div class="count-cell">系统类<b>{{ announce.system_count }}</b></div>
+      </div>
+
+      {% for item in announce.records %}
+      <div class="ann {% if item.is_focus %}focus{% endif %}">
+        <span class="ann-id">#{{ item.id }}</span>
+        <span class="ann-body">
+          <span class="ann-title">{{ item.title }}</span>
+          <span class="ann-date">{{ item.date_text or "时间未知" }}</span>
+        </span>
+        <span class="ann-tag {% if item.group == 'ACTIVITY' %}act{% endif %}">
+          {{ item.group_cn }}
+        </span>
+      </div>
+      {% endfor %}
+
+      <div class="card-footer">
+        <span>用 `方舟公告 &lt;编号&gt;` 查看正文；`方舟订阅公告` 可推送新公告</span>
+        <span>DATA SOURCE / AK-CONF.HYPERGRYPH</span>
+      </div>
+    </div>
+  </body>
+</html>

@@ -22,6 +22,7 @@ from typing import Any
 
 import httpx
 
+from .assets import char_avatar, char_portrait
 from .gamedata import banner_group
 
 logger = logging.getLogger(__name__)
@@ -380,7 +381,7 @@ def format_record_time(gacha_ts: Any) -> str:
     if seconds <= 0:
         return ""
     try:
-        return datetime.fromtimestamp(seconds).strftime("%m-%d %H:%M")
+        return datetime.fromtimestamp(seconds).strftime("%Y-%m-%d %H:%M")
     except (OSError, OverflowError, ValueError):
         return ""
 
@@ -436,13 +437,15 @@ def _luck_label(avg_six: float, six_total: int) -> str:
     """
     if six_total <= 0 or avg_six <= 0:
         return ""
-    if avg_six <= 28:
+    # Calibrated against the real odds: a 2% base rate with soft pity from pull
+    # 50 puts the expected average at roughly 34-35 pulls per six star.
+    if avg_six <= 25:
         return "欧皇"
-    if avg_six <= 36:
+    if avg_six <= 32:
         return "偏欧"
-    if avg_six <= 45:
+    if avg_six <= 42:
         return "平稳"
-    if avg_six <= 55:
+    if avg_six <= 50:
         return "偏非"
     return "非酋"
 
@@ -514,6 +517,8 @@ def _summarize(
                 {
                     "char_id": char_id,
                     "name": name,
+                    "avatar": char_avatar(char_id) if char_id else "",
+                    "portrait": char_portrait(char_id, 2) if char_id else "",
                     "pulls": since,
                     "pool_id": pool_id,
                     "pool_name": pool_name,
@@ -526,7 +531,19 @@ def _summarize(
 
     total = len(records)
     six_total = counts[SIX_STAR]
+    stamps = [
+        int(item.get("gachaTs") or 0)
+        for item in records
+        if int(item.get("gachaTs") or 0) > 0
+    ]
+    date_range = ""
+    if stamps:
+        date_range = (
+            f"{format_record_time(min(stamps))} ~ {format_record_time(max(stamps))}"
+        )
     return {
+        "date_range": date_range,
+        "avg_up": round(total / up_hits, 1) if up_hits else 0.0,
         "total": total,
         "counts": counts,
         "six_total": six_total,

@@ -9,7 +9,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from .assets import char_avatar, char_portrait, skill_icon
+from .assets import (
+    char_avatar,
+    char_portrait,
+    elite_icon,
+    potential_icon,
+    profession_icon,
+    rarity_icon,
+    skill_icon,
+)
 
 # Display order is significant: the roster card renders professions in this order.
 PROFESSION_CN: dict[str, str] = {
@@ -39,16 +47,23 @@ def _operator_entry(char: dict[str, Any], char_info: dict[str, Any]) -> dict[str
     char_id = str(char.get("charId") or "")
     meta = char_info.get(char_id) or {}
     profession = str(meta.get("profession") or "")
+    stars = int(meta.get("rarity") or 0) + 1
+    elite = int(char.get("evolvePhase") or 0)
+    potential = int(char.get("potentialRank") or 0)
     return {
         "char_id": char_id,
         "name": str(meta.get("name") or char_id),
         "profession": profession,
         "profession_cn": PROFESSION_CN.get(profession, UNKNOWN_PROFESSION_CN),
+        "profession_icon": profession_icon(profession),
+        "rarity_icon": rarity_icon(stars),
+        "elite_icon": elite_icon(elite),
+        "potential_icon": potential_icon(potential),
         # charInfoMap rarity is zero based; stars are what players expect.
-        "stars": int(meta.get("rarity") or 0) + 1,
+        "stars": stars,
         "level": int(char.get("level") or 0),
-        "elite": int(char.get("evolvePhase") or 0),
-        "potential": int(char.get("potentialRank") or 0),
+        "elite": elite,
+        "potential": potential,
         "favor": int(char.get("favorPercent") or 0),
         "avatar": char_avatar(char_id) if char_id else "",
         "skills": list(char.get("skills") or []),
@@ -201,6 +216,14 @@ def build_operator_context(
     return {
         "name": operator.get("name") or char_id,
         "profession_cn": operator.get("profession_cn") or UNKNOWN_PROFESSION_CN,
+        "profession_icon": operator.get("profession_icon")
+        or profession_icon(str(operator.get("profession") or "")),
+        "rarity_icon": operator.get("rarity_icon")
+        or rarity_icon(int(operator.get("stars") or 0)),
+        "elite_icon": operator.get("elite_icon")
+        or elite_icon(int(operator.get("elite") or 0)),
+        "potential_icon": operator.get("potential_icon")
+        or potential_icon(int(operator.get("potential") or 0)),
         "stars": int(operator.get("stars") or 0),
         "level": int(operator.get("level") or 0),
         "elite": int(operator.get("elite") or 0),

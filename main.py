@@ -27,6 +27,7 @@ from astrbot.core.star.filter.command import CommandFilter
 from astrbot.core.star.star_handler import EventType, star_handlers_registry
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
+from .core.announce import AnnounceClient, AnnounceError
 from .core.cards import build_note_context, build_sanity_context
 from .core.daily import (
     build_building_context,
@@ -96,6 +97,10 @@ HELP_TEXT = """罗德岛终端 · 明日方舟助手
 方舟任务              每日/每周任务与周常奖励
 方舟公招              公开招募栏位状态
 
+【官方公告】
+方舟公告              公告列表（`方舟公告 <编号>` 看正文）
+方舟订阅公告 / 方舟取消订阅公告  新公告私聊推送
+
 【抽卡】
 方舟抽卡分析          六星统计、保底与 UP 判定
 方舟抽卡记录          最近的抽卡记录
@@ -136,6 +141,13 @@ HELP_SECTIONS = [
             {"cmd": "方舟肉鸽", "desc": "集成战略收藏品与投资"},
             {"cmd": "方舟任务", "desc": "每日/每周任务与周常奖励"},
             {"cmd": "方舟公招", "desc": "公开招募栏位状态"},
+        ],
+    },
+    {
+        "title": "官方公告",
+        "items": [
+            {"cmd": "方舟公告", "desc": "公告列表，可带编号看正文"},
+            {"cmd": "方舟订阅公告 / 方舟取消订阅公告", "desc": "新公告私聊推送"},
         ],
     },
     {
@@ -182,6 +194,10 @@ class ArknightsPlugin(Star):
             Path(get_astrbot_plugin_data_path()) / PLUGIN_NAME / "gamedata"
         )
         self._gacha = GachaClient()
+        self._announce = AnnounceClient()
+        # Announcement ids already pushed, so a restart does not resend them.
+        self._announce_seen: set[str] = set()
+        self._announce_primed = False
         # user_key -> whether a sanity-full notice has already been sent
         self._sanity_notified: dict[str, bool] = {}
         self.scheduler: AsyncIOScheduler | None = None
@@ -202,6 +218,15 @@ class ArknightsPlugin(Star):
                 self._sanity_poll_job,
                 IntervalTrigger(minutes=minutes),
                 id="arknights_sanity_poll",
+                replace_existing=True,
+            )
+            announce_minutes = max(
+                15, int(self.config.get("announce_poll_interval", 30) or 30)
+            )
+            self.scheduler.add_job(
+                self._announce_poll_job,
+                IntervalTrigger(minutes=announce_minutes),
+                id="arknights_announce_poll",
                 replace_existing=True,
             )
             self.scheduler.start()
@@ -252,6 +277,7 @@ class ArknightsPlugin(Star):
         await self.hypergryph.close()
         await self._gamedata.close()
         await self._gacha.close()
+        await self._announce.close()
 
     # ── helpers ───────────────────────────────────────────────────────────
 
@@ -1354,6 +1380,144 @@ class ArknightsPlugin(Star):
                 f"{'★' * stars} {name} · {pool}" + (f" · {stamp}" if stamp else "")
             )
         yield event.plain_result("\n".join(lines))
+
+    # ── announcements ─────────────────────────────────────────────────────
+
+    async def _announce_records(self) -> list[dict[str, Any]]:
+        """Fetch the official announcement list.
+
+        Returns:
+            Announcements newest first.
+
+        Raises:
+            AnnounceError: When the feed is unreachable.
+        """
+        return await self._announce.fetch()
+
+    @filter.command("方舟公告")
+    async def show_announcements(self, event: AstrMessageEvent):
+        """List official announcements, or show one by id."""
+        args = self._args(event)
+        try:
+            records = await self._announce_records()
+        except AnnounceError as exc:
+            yield event.plain_result(f"公告获取失败：{exc}")
+            return
+        if not records:
+            yield event.plain_result("没有获取到官方公告。")
+            return
+
+        if args and args[0].lstrip("#").isdigit():
+            wanted = args[0].lstrip("#")
+            target = next((item for item in records if item["id"] == wanted), None)
+            if target is None:
+                yield event.plain_result(f"没有找到编号为 {wanted} 的公告。")
+                return
+            try:
+                body = await self._announce.detail(target["url"])
+            except AnnounceError as exc:
+                yield event.plain_result(f"公告正文获取失败：{exc}")
+                return
+            yield event.plain_result(
+                f"[{target['group_cn']}] {target['title']}\n"
+                f"{target['date_text']}\n"
+                f"编号 {target['id']}\n\n{body}"
+            )
+            return
+
+        try:
+            focus = await self._announce.focus_id()
+        except AnnounceError:
+            focus = ""
+        items = [
+            {**record, "is_focus": bool(focus) and record["id"] == focus}
+            for record in records[:15]
+        ]
+        # NOTE: the key must not be "items" — Jinja resolves announce.items to
+        # the dict's own .items method and the loop then fails.
+        context = {
+            "records": items,
+            "total": len(records),
+            "activity_count": sum(1 for r in records if r["group"] == "ACTIVITY"),
+            "system_count": sum(1 for r in records if r["group"] == "SYSTEM"),
+        }
+        image = await self._render("announce.html", {"announce": context})
+        if image is None:
+            yield event.plain_result(
+                self._lines(
+                    [
+                        (
+                            f"#{item['id']} [{item['group_cn']}] {item['title']}",
+                            item["date_text"],
+                        )
+                        for item in items
+                    ]
+                )
+            )
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    @filter.command("方舟订阅公告")
+    async def subscribe_announce(self, event: AstrMessageEvent):
+        """Enable new-announcement notifications for the caller."""
+        if not event.is_private_chat():
+            yield event.plain_result("公告推送通过私聊发送，请在私聊中订阅。")
+            return
+        await self.store.set_announce_sub(
+            event.get_sender_id(), event.unified_msg_origin, True
+        )
+        minutes = max(15, int(self.config.get("announce_poll_interval", 30) or 30))
+        yield event.plain_result(
+            f"已订阅官方公告，每 {minutes} 分钟检查一次，有新公告会私聊推送。\n"
+            "发送 `方舟取消订阅公告` 可关闭。"
+        )
+
+    @filter.command("方舟取消订阅公告")
+    async def unsubscribe_announce(self, event: AstrMessageEvent):
+        """Disable new-announcement notifications for the caller."""
+        await self.store.set_announce_sub(event.get_sender_id(), "", False)
+        yield event.plain_result("已取消公告订阅。")
+
+    async def _announce_poll_job(self) -> None:
+        """Push announcements that appeared since the last check.
+
+        The first run only records the current newest id, so enabling the
+        subscription never fires a burst of historical announcements.
+        """
+        subs = await self.store.list_announce_subs()
+        if not subs:
+            return
+        try:
+            records = await self._announce_records()
+        except AnnounceError as exc:
+            logger.warning("[公告轮询] 获取失败: %s", exc)
+            return
+        if not records:
+            return
+
+        if not self._announce_primed:
+            self._announce_seen.update(item["id"] for item in records)
+            self._announce_primed = True
+            logger.info("[公告轮询] 已初始化，当前共 %d 条公告", len(records))
+            return
+
+        fresh = [item for item in records if item["id"] not in self._announce_seen]
+        if not fresh:
+            return
+        self._announce_seen.update(item["id"] for item in fresh)
+
+        lines = [
+            f"[{item['group_cn']}] {item['title']}\n{item['date_text']}"
+            for item in fresh[:5]
+        ]
+        text = "官方新公告\n\n" + "\n\n".join(lines)
+        if len(fresh) > 5:
+            text += f"\n\n……另有 {len(fresh) - 5} 条，发送 `方舟公告` 查看全部"
+        for sub in subs:
+            umo = str(sub.get("umo") or "")
+            if umo:
+                await self._notify(umo, text)
+        logger.info("[公告轮询] 推送了 %d 条新公告", len(fresh))
 
     # ── 漏写唤醒前缀提醒 ───────────────────────────────────────────────────
     # 群聊里指令必须带唤醒前缀（本部署为 ~）。用户漏写时 AstrBot 不会唤醒

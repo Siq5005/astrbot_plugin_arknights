@@ -37,7 +37,7 @@ def _default_path() -> Path:
 
 def _empty() -> dict[str, Any]:
     """Return a freshly initialized store structure."""
-    return {"users": {}, "subs": {"sanity": [], "sign_groups": []}}
+    return {"users": {}, "subs": {"sanity": [], "sign_groups": [], "announce": []}}
 
 
 class Store:
@@ -85,6 +85,7 @@ class Store:
         subs = data.setdefault("subs", {})
         subs.setdefault("sanity", [])
         subs.setdefault("sign_groups", [])
+        subs.setdefault("announce", [])
         return data
 
     def _write(self, data: dict[str, Any]) -> None:
@@ -234,11 +235,12 @@ class Store:
     def _drop_user(data: dict[str, Any], user_key: str) -> None:
         """Delete a user record and any per-user subscription entries."""
         data["users"].pop(user_key, None)
-        data["subs"]["sanity"] = [
-            item
-            for item in data["subs"]["sanity"]
-            if str(item.get("user_key", "")) != user_key
-        ]
+        for key in ("sanity", "announce"):
+            data["subs"][key] = [
+                item
+                for item in data["subs"][key]
+                if str(item.get("user_key", "")) != user_key
+            ]
 
     async def list_sanity_subs(self) -> list[dict[str, str]]:
         """Return the sanity-full notification targets.
@@ -298,4 +300,34 @@ class Store:
             if enabled:
                 groups.append({"group_id": group_id, "umo": str(umo)})
             data["subs"]["sign_groups"] = groups
+            self._write(data)
+
+    async def list_announce_subs(self) -> list[dict[str, str]]:
+        """Return the announcement notification targets.
+
+        Returns:
+            One entry per subscriber with ``user_key`` and ``umo``.
+        """
+        async with self._lock:
+            return [dict(item) for item in self._read()["subs"]["announce"]]
+
+    async def set_announce_sub(self, user_key: str, umo: str, enabled: bool) -> None:
+        """Enable or disable announcement notifications for a user.
+
+        Args:
+            user_key: Platform user identifier.
+            umo: Session to notify; required when enabling.
+            enabled: Desired subscription state.
+        """
+        user_key = str(user_key)
+        async with self._lock:
+            data = self._read()
+            subs = [
+                item
+                for item in data["subs"]["announce"]
+                if str(item.get("user_key", "")) != user_key
+            ]
+            if enabled:
+                subs.append({"user_key": user_key, "umo": str(umo)})
+            data["subs"]["announce"] = subs
             self._write(data)
