@@ -88,21 +88,56 @@ PLAYER = {
 }
 
 EXPECTED_COMMANDS = {
-    "ark",
-    "扫码绑定",
-    "验证码绑定",
-    "token绑定",
-    "绑定列表",
+    "方舟帮助",
+    "方舟绑定",
+    "方舟绑定列表",
+    "方舟切换绑定",
+    "方舟删除绑定",
+    "方舟便签",
+    "方舟理智",
+    "方舟签到",
+    "方舟订阅理智",
+    "方舟取消订阅理智",
+    "方舟订阅签到",
+    "方舟取消订阅签到",
+    "方舟干员列表",
+    "方舟干员",
+    "方舟面板",
+}
+
+# Commands registered by astrbot_plugin_endfield that must never be claimed by
+# this plugin, otherwise a single message would be handled by both plugins.
+ENDFIELD_COMMANDS = {
+    "zmd",
+    "便签",
+    "全服统计",
+    "公告",
+    "公告最新",
     "切换绑定",
     "删除绑定",
-    "便签",
+    "危机合约",
+    "取消订阅公告",
+    "取消订阅理智",
+    "取消订阅调度券",
+    "同步面板",
+    "国际服登录",
+    "地区建设",
+    "帝江号建设",
+    "干员列表",
+    "成就列表",
+    "手机绑定",
+    "扫码绑定",
+    "抽卡分析",
+    "抽卡分析同步",
+    "抽卡记录",
+    "授权登陆",
+    "日历",
     "理智",
     "签到",
+    "绑定列表",
+    "订阅公告",
     "订阅理智",
-    "取消订阅理智",
-    "订阅签到",
-    "取消订阅签到",
-    "干员列表",
+    "订阅调度券",
 }
 
 failures: list[str] = []
@@ -172,11 +207,23 @@ async def main() -> int:
         plugin_module.PLUGIN_NAME == "astrbot_plugin_arknights",
     )
 
-    missing = EXPECTED_COMMANDS - registered_commands()
+    registered = registered_commands()
+    missing = EXPECTED_COMMANDS - registered
     check(
         "all expected commands registered",
         not missing,
-        f"missing: {sorted(missing)}" if missing else "15/15",
+        f"missing: {sorted(missing)}"
+        if missing
+        else f"{len(EXPECTED_COMMANDS)}/{len(EXPECTED_COMMANDS)}",
+    )
+
+    # The whole point of the 方舟 prefix: a message must never be claimed by both
+    # this plugin and astrbot_plugin_endfield.
+    overlap = registered & ENDFIELD_COMMANDS
+    check(
+        "no command name collides with astrbot_plugin_endfield",
+        not overlap,
+        f"colliding: {sorted(overlap)}" if overlap else "0 collisions",
     )
 
     plugin = plugin_module.ArknightsPlugin(
@@ -210,10 +257,11 @@ async def main() -> int:
 
     # Unbound user
     await plugin.store.remove_user("10001")
-    results = await drive(plugin.show_note(StubEvent("/便签")))
+    results = await drive(plugin.show_note(StubEvent("/方舟便签")))
     check(
-        "便签 without binding prompts to bind",
-        results and results[0][0] == "plain" and "绑定" in results[0][1],
+        "方舟便签 without binding prompts to bind",
+        results and results[0][0] == "plain" and "方舟绑定" in results[0][1],
+        results[0][1] if results else "no result",
     )
 
     # Bind, then exercise every card command
@@ -232,21 +280,12 @@ async def main() -> int:
         umo="test:PrivateMessage:10001",
     )
 
-    for command, label in (
-        ("/便签", "便签"),
-        ("/理智", "理智"),
-        ("/干员列表", "干员列表"),
+    for command, handler, label in (
+        ("/方舟便签", "show_note", "方舟便签"),
+        ("/方舟理智", "show_sanity", "方舟理智"),
+        ("/方舟干员列表", "show_roster", "方舟干员列表"),
     ):
-        results = await drive(
-            getattr(
-                plugin,
-                {
-                    "/便签": "show_note",
-                    "/理智": "show_sanity",
-                    "/干员列表": "show_roster",
-                }[command],
-            )(StubEvent(command))
-        )
+        results = await drive(getattr(plugin, handler)(StubEvent(command)))
         image_ok = (
             results
             and results[0][0] == "chain"
@@ -255,31 +294,44 @@ async def main() -> int:
         )
         check(f"{label} renders an image", bool(image_ok))
 
-    # Operator detail through the regex handler
-    results = await drive(plugin.show_operator(StubEvent("/阿米娅面板")))
+    # Operator detail by argument; the form deliberately does not end in 面板 so
+    # that the Endfield plugin's "xx面板" regex cannot also match it.
+    results = await drive(plugin.show_operator(StubEvent("/方舟干员 阿米娅")))
     check(
-        "阿米娅面板 resolves despite the command prefix",
+        "方舟干员 <名称> renders the detail card",
         results and results[0][0] == "chain" and Path(results[0][1][0].path).is_file(),
     )
 
-    results = await drive(plugin.show_operator(StubEvent("/不存在面板")))
+    results = await drive(plugin.show_operator(StubEvent("/方舟面板 阿米娅")))
+    check(
+        "方舟面板 alias works too",
+        results and results[0][0] == "chain" and Path(results[0][1][0].path).is_file(),
+    )
+
+    results = await drive(plugin.show_operator(StubEvent("/方舟干员 不存在")))
     check(
         "unknown operator reports a friendly hint",
         results and results[0][0] == "plain" and "未找到干员" in results[0][1],
     )
 
-    results = await drive(plugin.do_sign(StubEvent("/签到")))
-    check("签到 reports the awards", results and "合成玉x500" in results[0][1])
-
-    results = await drive(plugin.list_bindings(StubEvent("/绑定列表")))
+    results = await drive(plugin.show_operator(StubEvent("/方舟干员")))
     check(
-        "绑定列表 shows the role but never the token",
+        "方舟干员 without a name prints usage",
+        results and results[0][0] == "plain" and "用法" in results[0][1],
+    )
+
+    results = await drive(plugin.do_sign(StubEvent("/方舟签到")))
+    check("方舟签到 reports the awards", results and "合成玉x500" in results[0][1])
+
+    results = await drive(plugin.list_bindings(StubEvent("/方舟绑定列表")))
+    check(
+        "方舟绑定列表 shows the role but never the token",
         results and "token" not in results[0][1] and "1. 探姬#9315" in results[0][1],
         results[0][1].replace("\n", " | ") if results else "no result",
     )
 
-    results = await drive(plugin.show_help(StubEvent("/ark")))
-    check("ark renders the help card", results and results[0][0] == "chain")
+    results = await drive(plugin.show_help(StubEvent("/方舟帮助")))
+    check("方舟帮助 renders the help card", results and results[0][0] == "chain")
 
     # Scheduler configuration
     plugin.config = {"sign_time": "03:30", "sanity_poll_interval": 5}

@@ -71,38 +71,21 @@ async def test_poll_qr_expired_raises():
 
 
 @pytest.mark.anyio
-async def test_login_by_phone_code_returns_token():
+async def test_get_token_by_scan_code_returns_token():
     def handler(request):
+        assert request.url.path == "/user/auth/v1/token_by_scan_code"
         return httpx.Response(200, json={"status": 0, "data": {"token": "T1"}})
 
-    assert await _client(handler).login_by_phone_code("138", "123456") == "T1"
+    assert await _client(handler).get_token_by_scan_code("sc1") == "T1"
 
 
 @pytest.mark.anyio
-async def test_send_phone_code_raises_on_business_error():
+async def test_get_token_by_scan_code_rejects_on_business_error():
     def handler(request):
-        return httpx.Response(200, json={"status": 1, "msg": "手机号格式错误"})
+        return httpx.Response(200, json={"status": 1, "msg": "扫码凭证无效"})
 
-    with pytest.raises(HypergryphError, match="手机号格式错误"):
-        await _client(handler).send_phone_code("bad")
-
-
-@pytest.mark.anyio
-async def test_verify_token_returns_basic_info():
-    def handler(request):
-        assert request.url.params["token"] == "T1"
-        return httpx.Response(200, json={"status": 0, "data": {"hgId": "123"}})
-
-    assert (await _client(handler).verify_token("T1"))["hgId"] == "123"
-
-
-@pytest.mark.anyio
-async def test_verify_token_invalid_raises():
-    def handler(request):
-        return httpx.Response(200, json={"status": 1, "msg": "token无效"})
-
-    with pytest.raises(HypergryphError, match="token无效"):
-        await _client(handler).verify_token("bad")
+    with pytest.raises(HypergryphError, match="扫码凭证无效"):
+        await _client(handler).get_token_by_scan_code("bad")
 
 
 @pytest.mark.anyio

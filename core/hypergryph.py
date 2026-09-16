@@ -1,9 +1,8 @@
-"""Hypergryph passport login flows.
+"""Hypergryph passport login.
 
-Provides the two interactive ways of obtaining a Hypergryph passport token that
-the Skland client can exchange for game credentials: scanning a QR code with the
-Skland app, or an SMS verification code. A pasted token can also be validated
-through :meth:`HypergryphClient.verify_token`.
+The only supported login flow is scanning a QR code with the Skland app, which
+yields the Hypergryph passport token that the Skland client then exchanges for
+game credentials.
 
 This module never imports ``astrbot``.
 """
@@ -174,55 +173,3 @@ class HypergryphClient:
             json_data={"scanCode": scan_code},
         )
         return str((data.get("data") or {}).get("token", ""))
-
-    async def send_phone_code(self, phone: str) -> None:
-        """Send an SMS login verification code.
-
-        Args:
-            phone: Phone number bound to the Hypergryph account.
-
-        Raises:
-            HypergryphError: When the request is rejected.
-        """
-        await self._request(
-            "POST",
-            "/general/v1/send_phone_code",
-            json_data={"phone": phone, "type": 2},
-        )
-
-    async def login_by_phone_code(self, phone: str, code: str) -> str:
-        """Exchange an SMS code for a passport token.
-
-        Args:
-            phone: Phone number bound to the Hypergryph account.
-            code: Verification code received by SMS.
-
-        Returns:
-            The Hypergryph passport token.
-
-        Raises:
-            HypergryphError: When the code is rejected.
-        """
-        data = await self._request(
-            "POST",
-            "/user/auth/v2/token_by_phone_code",
-            json_data={"phone": phone, "code": code},
-        )
-        return str((data.get("data") or {}).get("token", ""))
-
-    async def verify_token(self, token: str) -> dict[str, Any]:
-        """Validate a pasted passport token.
-
-        Args:
-            token: Hypergryph passport token.
-
-        Returns:
-            Basic account information such as ``hgId``.
-
-        Raises:
-            HypergryphError: When the token is invalid.
-        """
-        data = await self._request(
-            "GET", "/user/info/v1/basic", params={"token": token}
-        )
-        return data.get("data") or {}

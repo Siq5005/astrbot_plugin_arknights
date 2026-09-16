@@ -43,34 +43,36 @@ PLUGIN_VERSION = "0.1.0"
 QR_TIMEOUT = 120
 QR_POLL_INTERVAL = 2
 
-NO_BINDING_TEXT = (
-    "你还没有绑定账号。可私聊发送 `扫码绑定` 或 `token绑定 <token>` 开始绑定。"
-)
+NO_BINDING_TEXT = "你还没有绑定账号。请在私聊发送 `方舟绑定` 扫码登录。"
 
 # Substrings that indicate the stored passport token is no longer usable.
 AUTH_ERROR_MARKERS = ("未登录", "失效", "过期", "unauthorized", "401", "403")
 
+# Every command is namespaced with 方舟 so that it can never collide with the
+# Endfield plugin (which registers bare 理智 / 便签 / 签到 / 扫码绑定 ... and a
+# permissive "xx面板" regex). Keep this prefix on every command.
+CMD_PREFIX = "方舟"
+
 HELP_TEXT = """罗德岛终端 · 明日方舟助手
 
+所有指令以 `方舟` 开头，避免与终末地插件（zmd）的同名指令冲突。
+
 【账号绑定】（请私聊使用）
-扫码绑定              使用森空岛 APP 扫码登录
-验证码绑定 <手机号>    发送短信验证码
-验证码绑定 <手机号> <验证码>  完成绑定
-token绑定 <token>     使用鹰角通行证 token 绑定
-绑定列表              查看所有绑定账号
-切换绑定 <序号>        切换主账号
-删除绑定 <序号>        解绑指定账号
+方舟绑定              使用森空岛 APP 扫码登录（唯一登录方式）
+方舟绑定列表          查看所有绑定账号
+方舟切换绑定 <序号>    切换主账号
+方舟删除绑定 <序号>    解绑指定账号
 
 【数据查询】
-便签                  账号总览
-理智                  理智与回满时间
-干员列表              已持有干员图鉴
-<干员名>面板           单个干员详情
+方舟便签              账号总览
+方舟理智              理智与回满时间
+方舟干员列表          已持有干员图鉴
+方舟干员 <干员名>      单个干员详情
 
 【签到与提醒】
-签到                  手动执行森空岛签到
-订阅理智 / 取消订阅理智  理智回满推送
-订阅签到 / 取消订阅签到  群内签到结果通知
+方舟签到              手动执行森空岛签到
+方舟订阅理智 / 方舟取消订阅理智  理智回满推送
+方舟订阅签到 / 方舟取消订阅签到  群内签到结果通知
 
 账号凭证仅保存在本机，且不会在任何回复中回显。
 """
@@ -80,30 +82,27 @@ HELP_SECTIONS = [
     {
         "title": "账号绑定（请私聊使用）",
         "items": [
-            {"cmd": "扫码绑定", "desc": "使用森空岛 APP 扫码登录"},
-            {"cmd": "验证码绑定 <手机号>", "desc": "发送短信验证码"},
-            {"cmd": "验证码绑定 <手机号> <验证码>", "desc": "完成绑定"},
-            {"cmd": "token绑定 <token>", "desc": "使用鹰角通行证 token 绑定"},
-            {"cmd": "绑定列表", "desc": "查看所有绑定账号"},
-            {"cmd": "切换绑定 <序号>", "desc": "切换主账号"},
-            {"cmd": "删除绑定 <序号>", "desc": "解绑指定账号"},
+            {"cmd": "方舟绑定", "desc": "森空岛 APP 扫码登录（唯一登录方式）"},
+            {"cmd": "方舟绑定列表", "desc": "查看所有绑定账号"},
+            {"cmd": "方舟切换绑定 <序号>", "desc": "切换主账号"},
+            {"cmd": "方舟删除绑定 <序号>", "desc": "解绑指定账号"},
         ],
     },
     {
         "title": "数据查询",
         "items": [
-            {"cmd": "便签", "desc": "账号总览"},
-            {"cmd": "理智", "desc": "理智与回满时间"},
-            {"cmd": "干员列表", "desc": "已持有干员图鉴"},
-            {"cmd": "<干员名>面板", "desc": "单个干员详情"},
+            {"cmd": "方舟便签", "desc": "账号总览"},
+            {"cmd": "方舟理智", "desc": "理智与回满时间"},
+            {"cmd": "方舟干员列表", "desc": "已持有干员图鉴"},
+            {"cmd": "方舟干员 <干员名>", "desc": "单个干员详情"},
         ],
     },
     {
         "title": "签到与提醒",
         "items": [
-            {"cmd": "签到", "desc": "手动执行森空岛签到"},
-            {"cmd": "订阅理智 / 取消订阅理智", "desc": "理智回满推送"},
-            {"cmd": "订阅签到 / 取消订阅签到", "desc": "群内签到结果通知"},
+            {"cmd": "方舟签到", "desc": "手动执行森空岛签到"},
+            {"cmd": "方舟订阅理智 / 方舟取消订阅理智", "desc": "理智回满推送"},
+            {"cmd": "方舟订阅签到 / 方舟取消订阅签到", "desc": "群内签到结果通知"},
         ],
     },
 ]
@@ -304,21 +303,6 @@ class ArknightsPlugin(Star):
         )
         return user, binding
 
-    async def _complete_binding(self, user_key: str, token: str) -> str | None:
-        """Validate a passport token and persist the resulting bindings.
-
-        The token is exercised through the real authorization chain rather than
-        the lightweight account endpoint, so a token that cannot actually read
-        game data is rejected up front.
-
-        Args:
-            user_key: Platform user identifier.
-            token: Hypergryph passport token.
-
-        Returns:
-            A user facing error message, or ``None`` on success.
-        """
-
     async def _complete_binding(
         self, user_key: str, token: str, umo: str = ""
     ) -> str | None:
@@ -363,7 +347,7 @@ class ArknightsPlugin(Star):
 
     # ── account commands ──────────────────────────────────────────────────
 
-    @filter.command("ark", alias={"方舟帮助", "ark帮助"})
+    @filter.command("方舟帮助")
     async def show_help(self, event: AstrMessageEvent):
         """Show the plugin command overview as a card."""
         image = await self._render("help.html", {"sections": HELP_SECTIONS})
@@ -372,7 +356,7 @@ class ArknightsPlugin(Star):
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
 
-    @filter.command("扫码绑定")
+    @filter.command("方舟绑定")
     async def bind_by_qr(self, event: AstrMessageEvent):
         """Bind an account by scanning a QR code with the Skland app."""
         if not event.is_private_chat():
@@ -498,71 +482,16 @@ class ArknightsPlugin(Star):
                 result = await self._complete_binding(user_key, token, umo)
                 await self._notify(umo, result or "扫码绑定成功。")
                 return
-            await self._notify(umo, "二维码已过期，请重新发送 `扫码绑定`。")
+            await self._notify(umo, "二维码已过期，请重新发送 `方舟绑定`。")
         finally:
             await self._recall(event, message_id)
 
-    @filter.command("验证码绑定")
-    async def bind_by_phone(self, event: AstrMessageEvent):
-        """Bind an account with an SMS verification code."""
-        if not event.is_private_chat():
-            yield event.plain_result("为了账号安全，请在私聊中使用绑定指令。")
-            return
-        args = self._args(event)
-        if not args:
-            yield event.plain_result(
-                "用法：\n验证码绑定 <手机号>  —— 发送验证码\n"
-                "验证码绑定 <手机号> <验证码>  —— 完成绑定"
-            )
-            return
-        phone = args[0]
-        if len(args) < 2:
-            try:
-                await self.hypergryph.send_phone_code(phone)
-            except HypergryphError as exc:
-                yield event.plain_result(f"发送验证码失败：{exc}")
-                return
-            yield event.plain_result(
-                f"验证码已发送至 {phone}，请回复：验证码绑定 {phone} <验证码>"
-            )
-            return
-
-        try:
-            token = await self.hypergryph.login_by_phone_code(phone, args[1])
-        except HypergryphError as exc:
-            yield event.plain_result(f"验证码登录失败：{exc}")
-            return
-        result = await self._complete_binding(
-            event.get_sender_id(), token, event.unified_msg_origin
-        )
-        yield event.plain_result(result or "绑定成功。")
-
-    @filter.command("token绑定", alias={"Token绑定", "tok绑定"})
-    async def bind_by_token(self, event: AstrMessageEvent):
-        """Bind an account with a pasted Hypergryph passport token."""
-        if not event.is_private_chat():
-            yield event.plain_result("为了账号安全，请在私聊中使用绑定指令。")
-            return
-        args = self._args(event)
-        if not args:
-            yield event.plain_result(
-                "用法：token绑定 <token>\n"
-                "token 获取方式：登录森空岛后访问 https://web-api.skland.com/account/info/hg"
-            )
-            return
-        result = await self._complete_binding(
-            event.get_sender_id(), args[0].strip(), event.unified_msg_origin
-        )
-        yield event.plain_result(result or "绑定成功。")
-
-    @filter.command("绑定列表")
+    @filter.command("方舟绑定列表")
     async def list_bindings(self, event: AstrMessageEvent):
         """List every account bound by the caller."""
         user = await self.store.get_user(event.get_sender_id())
         if not user or not user.get("bindings"):
-            yield event.plain_result(
-                "你还没有绑定账号。可私聊发送 `扫码绑定` 或 `token绑定 <token>` 开始绑定。"
-            )
+            yield event.plain_result(NO_BINDING_TEXT)
             return
         primary = str(user.get("primary_uid") or "")
         lines = [f"共 {len(user['bindings'])} 个绑定角色："]
@@ -573,10 +502,10 @@ class ArknightsPlugin(Star):
                 f"{index}. {binding.get('nick_name') or '未知'} · "
                 f"{binding.get('channel_name') or '未知服'} · uid ...{uid[-4:]}{mark}"
             )
-        lines.append("使用 `切换绑定 <序号>` 或 `删除绑定 <序号>` 管理。")
+        lines.append("使用 `方舟切换绑定 <序号>` 或 `方舟删除绑定 <序号>` 管理。")
         yield event.plain_result("\n".join(lines))
 
-    @filter.command("切换绑定")
+    @filter.command("方舟切换绑定")
     async def switch_binding(self, event: AstrMessageEvent):
         """Switch the primary role used by data queries."""
         args = self._args(event)
@@ -587,14 +516,14 @@ class ArknightsPlugin(Star):
         index = self._parse_index(args[0] if args else "")
         if index is None or not 0 <= index < len(user["bindings"]):
             yield event.plain_result(
-                f"序号无效。请使用 `绑定列表` 查看序号（1-{len(user['bindings'])}）。"
+                f"序号无效。请使用 `方舟绑定列表` 查看序号（1-{len(user['bindings'])}）。"
             )
             return
         target = user["bindings"][index]
         await self.store.set_primary(event.get_sender_id(), str(target.get("uid")))
         yield event.plain_result(f"已切换到 {target.get('nick_name') or '未知角色'}。")
 
-    @filter.command("删除绑定")
+    @filter.command("方舟删除绑定")
     async def delete_binding(self, event: AstrMessageEvent):
         """Remove one bound role."""
         args = self._args(event)
@@ -605,7 +534,7 @@ class ArknightsPlugin(Star):
         index = self._parse_index(args[0] if args else "")
         if index is None or not 0 <= index < len(user["bindings"]):
             yield event.plain_result(
-                f"序号无效。请使用 `绑定列表` 查看序号（1-{len(user['bindings'])}）。"
+                f"序号无效。请使用 `方舟绑定列表` 查看序号（1-{len(user['bindings'])}）。"
             )
             return
         target = user["bindings"][index]
@@ -683,13 +612,10 @@ class ArknightsPlugin(Star):
         text = str(exc)
         if any(marker in text for marker in AUTH_ERROR_MARKERS):
             await self.store.remove_user(event.get_sender_id())
-            return (
-                "账号凭证已失效，已清除你的绑定。"
-                "请重新发送 `扫码绑定` 或 `token绑定 <token>`。"
-            )
+            return "账号凭证已失效，已清除你的绑定。请重新发送 `方舟绑定`。"
         return f"查询失败：{text}"
 
-    @filter.command("便签")
+    @filter.command("方舟便签")
     async def show_note(self, event: AstrMessageEvent):
         """Show the account overview card."""
         resolved = await self._resolve_binding(event)
@@ -734,7 +660,7 @@ class ArknightsPlugin(Star):
             ]
         )
 
-    @filter.command("理智")
+    @filter.command("方舟理智")
     async def show_sanity(self, event: AstrMessageEvent):
         """Show the sanity card."""
         resolved = await self._resolve_binding(event)
@@ -794,7 +720,7 @@ class ArknightsPlugin(Star):
             return f"{name}：签到成功（{awards}）"
         return f"{name}：{result.error}"
 
-    @filter.command("签到")
+    @filter.command("方舟签到")
     async def do_sign(self, event: AstrMessageEvent):
         """Run the Skland attendance sign-in for the current role."""
         resolved = await self._resolve_binding(event)
@@ -819,7 +745,7 @@ class ArknightsPlugin(Star):
         else:
             yield event.plain_result(f"签到失败：{result.error}")
 
-    @filter.command("订阅理智")
+    @filter.command("方舟订阅理智")
     async def subscribe_sanity(self, event: AstrMessageEvent):
         """Enable sanity-full notifications for the caller."""
         if not event.is_private_chat():
@@ -834,16 +760,16 @@ class ArknightsPlugin(Star):
         minutes = max(10, int(self.config.get("sanity_poll_interval", 20) or 20))
         yield event.plain_result(
             f"已开启理智回满提醒，每 {minutes} 分钟检查一次。\n"
-            "发送 `取消订阅理智` 可关闭。"
+            "发送 `方舟取消订阅理智` 可关闭。"
         )
 
-    @filter.command("取消订阅理智")
+    @filter.command("方舟取消订阅理智")
     async def unsubscribe_sanity(self, event: AstrMessageEvent):
         """Disable sanity-full notifications for the caller."""
         await self.store.set_sanity_sub(event.get_sender_id(), "", False)
         yield event.plain_result("已关闭理智回满提醒。")
 
-    @filter.command("订阅签到")
+    @filter.command("方舟订阅签到")
     async def subscribe_sign(self, event: AstrMessageEvent):
         """Subscribe the current group to automatic sign-in results."""
         group_id = event.get_group_id()
@@ -853,7 +779,7 @@ class ArknightsPlugin(Star):
         await self.store.set_sign_group(group_id, event.unified_msg_origin, True)
         yield event.plain_result("已开启本群的自动签到结果通知。")
 
-    @filter.command("取消订阅签到")
+    @filter.command("方舟取消订阅签到")
     async def unsubscribe_sign(self, event: AstrMessageEvent):
         """Unsubscribe the current group from automatic sign-in results."""
         group_id = event.get_group_id()
@@ -902,7 +828,7 @@ class ArknightsPlugin(Star):
     async def _auto_sign_job(self) -> None:
         """Sign in every bound account and deliver a summary.
 
-        Results go to the groups subscribed with ``订阅签到``; when no group is
+        Results go to the groups subscribed with ``方舟订阅签到``; when no group is
         subscribed they are sent privately to each account owner instead.
         """
         users = await self.store.all_users()
@@ -979,7 +905,7 @@ class ArknightsPlugin(Star):
 
     # ── operator queries ──────────────────────────────────────────────────
 
-    @filter.command("干员列表", alias={"干员图鉴"})
+    @filter.command("方舟干员列表")
     async def show_roster(self, event: AstrMessageEvent):
         """Show the owned-operator roster card."""
         resolved = await self._resolve_binding(event)
@@ -1007,19 +933,21 @@ class ArknightsPlugin(Star):
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
 
-    @filter.regex(r"^\s*(.+?)\s*面板\s*$")
+    @filter.command("方舟干员", alias={"方舟面板"})
     async def show_operator(self, event: AstrMessageEvent):
         """Show the detail card for one owned operator."""
-        text = (event.message_str or "").strip()
-        name = text[: -len("面板")].strip() if text.endswith("面板") else text
-        # Strip any command prefix the user typed, e.g. /阿米娅面板
-        name = name.lstrip("/!#。．,，、:： ").strip()
+        args = self._args(event)
+        if not args:
+            yield event.plain_result(
+                "用法：方舟干员 <干员名>\n"
+                "例如：方舟干员 阿米娅\n"
+                "发送 `方舟干员列表` 可查看已持有的干员。"
+            )
+            return
+        name = " ".join(args).strip()
         resolved = await self._resolve_binding(event)
         if not resolved:
-            # Without a binding stay quiet in groups so that any message ending
-            # in 面板 does not trigger a reply.
-            if event.is_private_chat():
-                yield event.plain_result(NO_BINDING_TEXT)
+            yield event.plain_result(NO_BINDING_TEXT)
             return
         user, binding = resolved
         try:
@@ -1032,7 +960,7 @@ class ArknightsPlugin(Star):
         )
         if operator is None:
             yield event.plain_result(
-                f"未找到干员「{name}」。发送 `干员列表` 可查看已持有的干员。"
+                f"未找到干员「{name}」。发送 `方舟干员列表` 可查看已持有的干员。"
             )
             return
         context = build_operator_context(operator, data.get("equipmentInfoMap") or {})
