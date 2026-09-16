@@ -1,8 +1,8 @@
 name: astrbot_plugin_arknights
 display_name: 罗德岛终端
-desc: 基于森空岛官方接口的明日方舟插件，支持账号绑定、便签、理智、签到与干员查询。
-short_desc: 明日方舟数据查询与签到
-version: "0.1.0"
+desc: 基于森空岛官方接口的明日方舟插件：扫码绑定、便签、理智、签到、干员图鉴、基建、剿灭、集成战略、任务、公开招募与抽卡分析。
+short_desc: 明日方舟数据查询、抽卡分析与签到
+version: "0.2.0"
 author: Siq5005
 repo: https://github.com/Siq5005/astrbot_plugin_arknights
 astrbot_version: ">=4.16,<5"
