@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import logging
 import mimetypes
 import re
 import time
@@ -21,8 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import jinja2
-
-logger = logging.getLogger(__name__)
+from astrbot.api import logger
 
 ASSET_PATTERN = re.compile(r"__ASSET__/([A-Za-z0-9_./-]+)")
 CACHE_MAX_AGE_SECONDS = 300

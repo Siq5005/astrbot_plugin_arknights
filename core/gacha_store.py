@@ -5,20 +5,19 @@ plugin sees is kept locally and merged on every sync. History therefore
 accumulates across queries instead of being re-fetched and forgotten, and a
 later sync never loses an older pull.
 
-This module never imports ``astrbot``.
+This module imports only the framework logger from ``astrbot``.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 import time
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from astrbot.api import logger
 
 PLUGIN_DIR_NAME = "astrbot_plugin_arknights"
 STORE_FILE_NAME = "gacha.json"

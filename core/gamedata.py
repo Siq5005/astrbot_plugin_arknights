@@ -9,20 +9,18 @@ Two sources are merged, because neither carries everything:
 Both downloads are cached on disk and refreshed after a TTL, so the analysis
 keeps working when a mirror is briefly unreachable.
 
-This module never imports ``astrbot``.
+This module imports only the framework logger from ``astrbot``.
 """
 
 from __future__ import annotations
 
 import json
-import logging
 import time
 from pathlib import Path
 from typing import Any
 
 import httpx
-
-logger = logging.getLogger(__name__)
+from astrbot.api import logger
 
 # Ordered by preference; the first reachable mirror wins.
 META_URLS = (

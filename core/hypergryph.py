@@ -4,17 +4,14 @@ The only supported login flow is scanning a QR code with the Skland app, which
 yields the Hypergryph passport token that the Skland client then exchanges for
 game credentials.
 
-This module never imports ``astrbot``.
+This module imports only the framework logger from ``astrbot``.
 """
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 import httpx
-
-logger = logging.getLogger(__name__)
 
 AS_BASE = "https://as.hypergryph.com"
 

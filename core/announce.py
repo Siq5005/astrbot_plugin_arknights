@@ -13,21 +13,18 @@ official website instead, which is current:
 The body is returned as HTML so the caller can render it into a card, which
 suits the text-heavy website announcements.
 
-This module never imports ``astrbot``.
+This module imports only the framework logger from ``astrbot``.
 """
 
 from __future__ import annotations
 
 import html as html_module
-import logging
 import re
 from datetime import datetime
 from typing import Any
 from urllib.parse import urljoin
 
 import httpx
-
-logger = logging.getLogger(__name__)
 
 NEWS_URL = "https://ak.hypergryph.com/news"
 DETAIL_URL = "https://ak.hypergryph.com/news/{cid}"

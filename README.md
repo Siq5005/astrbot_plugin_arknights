@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.3.4-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.3.5-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -353,6 +353,15 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.3.5 (2026-09-17)
+
+- 🔧 **适配插件市场日志规范**：市场要求插件的 logger 必须且只能从 `astrbot.api` 导入，禁止使用 `logging.getLogger`。`core/` 下的模块原先用标准库日志，现已统一整改：
+
+  - `core/gamedata.py`、`store.py`、`render.py`、`gacha.py`、`gacha_store.py` 改为 `from astrbot.api import logger`
+  - `core/skland.py`、`hypergryph.py`、`announce.py` 的 logger 属**从未使用的死代码**（这三处原本定义了 logger 却一次都没调用），直接移除
+
+  整个仓库现已无任何 `logging` 引用。为保持单测可在不安装 AstrBot 的情况下运行，`tests/conftest.py` 在框架缺失时注入一个空的 logger 桩；集成检查仍走真实 AstrBot 以验证真实导入路径
 
 ### 0.3.4 (2026-09-17)
 

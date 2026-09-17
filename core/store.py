@@ -6,20 +6,19 @@ and rewritten on every operation, which keeps concurrent writers safe without
 holding a long-lived in-memory copy.
 
 This module deliberately avoids importing ``astrbot`` at import time so the
-storage layer can be unit tested without the framework installed.
+storage layer stays testable on its own.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 import time
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from astrbot.api import logger
 
 PLUGIN_DIR_NAME = "astrbot_plugin_arknights"
 

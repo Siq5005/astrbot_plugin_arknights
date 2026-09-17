@@ -11,21 +11,19 @@ Hypergryph passport token obtained by scanning the login QR code:
    ``X-Role-Token`` (the role token) and that cookie.
 
 The analysis half is pure and unit tested; only :class:`GachaClient` touches the
-network. This module never imports ``astrbot``.
+network.
 """
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import Any
 
 import httpx
+from astrbot.api import logger
 
 from .assets import char_avatar, char_portrait
 from .gamedata import banner_group
-
-logger = logging.getLogger(__name__)
 
 AS_BASE = "https://as.hypergryph.com"
 BINDING_BASE = "https://binding-api-account-prod.hypergryph.com"

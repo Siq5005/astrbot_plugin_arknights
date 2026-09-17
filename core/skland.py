@@ -7,7 +7,8 @@ The module is split in two halves:
   tested without network access.
 * :class:`SklandClient`, which performs the actual HTTP calls.
 
-Nothing here imports ``astrbot``; the framework only appears in ``main.py``.
+This module uses no framework logging; the signature and request primitives
+stand on their own.
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ import gzip
 import hashlib
 import hmac
 import json
-import logging
 import math
 import time
 import uuid
@@ -30,8 +30,6 @@ import httpx
 from Crypto.Cipher import AES, DES, PKCS1_v1_5
 from Crypto.PublicKey import RSA
 from Crypto.Util.Padding import pad
-
-logger = logging.getLogger(__name__)
 
 USER_AGENT = (
     "Mozilla/5.0 (Linux; Android 12; SM-A5560 Build/V417IR; wv) AppleWebKit/537.36 "
