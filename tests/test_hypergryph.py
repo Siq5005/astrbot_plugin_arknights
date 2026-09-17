@@ -62,12 +62,28 @@ async def test_poll_qr_scanned_returns_code():
 
 
 @pytest.mark.anyio
-async def test_poll_qr_expired_raises():
-    def handler(request):
-        return httpx.Response(200, json={"status": 101, "msg": "二维码已过期"})
+async def test_poll_qr_scanned_but_unconfirmed_keeps_polling():
+    """The real bug: a scanned code reports its own status and must not abort.
 
-    with pytest.raises(HypergryphError, match="二维码已过期"):
-        await _client(handler).poll_qr("abc")
+    Production returned ``{"status": 101, "msg": "已扫码待确认"}`` the moment the
+    user scanned, and the old code raised on it, so the login died before the
+    user could tap confirm. Only status 0 finishes the poll.
+    """
+
+    def handler(request):
+        return httpx.Response(200, json={"status": 101, "msg": "已扫码待确认"})
+
+    assert await _client(handler).poll_qr("abc") is None
+
+
+@pytest.mark.anyio
+async def test_poll_qr_any_intermediate_status_keeps_polling():
+    for status in (1, 101, 102, 200):
+
+        def handler(request, status=status):
+            return httpx.Response(200, json={"status": status, "msg": "处理中"})
+
+        assert await _client(handler).poll_qr("abc") is None
 
 
 @pytest.mark.anyio

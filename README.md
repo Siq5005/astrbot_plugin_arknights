@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.3.3-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.3.4-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -353,6 +353,11 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.3.4 (2026-09-17)
+
+- 🐛 **修复扫码绑定偶发失败**：`poll_qr` 只把 `status=100`（未扫码）当作等待，其余非 0 状态一律当错误抛出。但用户扫码后接口会返回 `{"status": 101, "msg": "已扫码待确认"}` —— 这是**正常的中间状态**（还需在 APP 里点确认），却被判为失败并立即中止，用户看到「扫码登录失败：已扫码待确认」。现在**任何非 0 状态都保持轮询**，由 120 秒超时兜底；只有 `status=0` 才算成功
+  之前偶发成功是因为轮询每 2 秒一次，若用户在两次轮询之间就完成确认，会直接看到成功状态
 
 ### 0.3.3 (2026-09-17)
 

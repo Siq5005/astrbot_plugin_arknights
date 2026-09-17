@@ -22,8 +22,12 @@ AS_BASE = "https://as.hypergryph.com"
 # app code used later by the oauth2 grant exchange.
 SKLAND_APP_CODE = "4ca99fa6b56cc2ba"
 
-# Status returned by scan_status while the QR code has not been scanned yet.
-SCAN_STATUS_PENDING = 100
+# scan_status only carries a scanCode when it reports this status. Every other
+# value means the login has not finished: 100 is "未扫码" and a scanned-but-
+# unconfirmed code reports its own status too. They must all keep the caller
+# polling — treating the intermediate state as an error aborted the login the
+# instant the user scanned, before they could confirm in the app.
+SCAN_STATUS_SUCCESS = 0
 
 
 class HypergryphError(Exception):
@@ -128,11 +132,10 @@ class HypergryphClient:
 
         Returns:
             The ``scanCode`` once the user has scanned and confirmed, otherwise
-            ``None`` while the code is still pending.
+            ``None`` while the login is still in progress.
 
         Raises:
-            HypergryphError: When the code expired, was rejected, or the request
-                failed.
+            HypergryphError: When the request itself fails.
         """
         client = await self._get_client()
         try:
@@ -148,11 +151,8 @@ class HypergryphClient:
             raise HypergryphError("响应格式异常") from exc
         if not isinstance(data, dict):
             raise HypergryphError("响应格式异常")
-        status = data.get("status")
-        if status == SCAN_STATUS_PENDING:
+        if data.get("status") != SCAN_STATUS_SUCCESS:
             return None
-        if status != 0:
-            raise HypergryphError(str(data.get("msg") or "扫码登录失败"))
         return str((data.get("data") or {}).get("scanCode") or "") or None
 
     async def get_token_by_scan_code(self, scan_code: str) -> str:
