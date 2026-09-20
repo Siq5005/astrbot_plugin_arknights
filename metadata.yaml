@@ -15,7 +15,7 @@ desc: |-
 
   所有指令以 `ark` 开头，与 `astrbot_plugin_endfield` 等插件不冲突。
 short_desc: 明日方舟数据查询、抽卡分析与签到
-version: "0.3.5"
+version: "0.3.6"
 author: Coe
 repo: https://github.com/Siq5005/astrbot_plugin_arknights
 astrbot_version: ">=4.16,<5"

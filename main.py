@@ -51,7 +51,7 @@ from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
-PLUGIN_VERSION = "0.3.5"
+PLUGIN_VERSION = "0.3.6"
 
 # Seconds the QR code stays valid, and how often it is polled.
 QR_TIMEOUT = 120
@@ -375,15 +375,19 @@ class ArknightsPlugin(Star):
         qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
         return buffer.getvalue()
 
-    async def _notify(self, umo: str, text: str) -> None:
+    async def _notify(self, umo: str, text: str, image: Path | None = None) -> None:
         """Send a message to a session outside the current event flow.
 
         Args:
             umo: Unified message origin of the target session.
             text: Message text.
+            image: Optional rendered card appended after the text.
         """
+        chain: list[Any] = [Plain(text)]
+        if image is not None:
+            chain.append(Image.fromFileSystem(str(image)))
         try:
-            await self.context.send_message(umo, MessageChain([Plain(text)]))
+            await self.context.send_message(umo, MessageChain(chain))
         except Exception as exc:  # noqa: BLE001 - never let delivery break a job
             logger.warning("发送消息失败 (%s): %s", umo, exc)
 
@@ -1602,18 +1606,47 @@ class ArknightsPlugin(Star):
             return
         self._announce_seen.update(item["id"] for item in fresh)
 
-        lines = [
+        # Announcements are mostly artwork, so a title-only push buries the
+        # actual content. The first few are delivered as rendered cards (the
+        # same card `ark公告 <编号>` returns) and the rest stay a text list.
+        card_limit = max(0, int(self.config.get("announce_push_cards", 3) or 0))
+        cards: list[tuple[dict[str, Any], Path | None]] = []
+        for item in fresh[:card_limit]:
+            try:
+                detail = await self._announce.fetch_detail(item["id"])
+            except AnnounceError as exc:
+                logger.warning("[公告轮询] %s 正文获取失败: %s", item["id"], exc)
+                cards.append((item, None))
+                continue
+            image = await self._render(
+                "announce_detail.html", {"announce": {**item, **detail}}
+            )
+            cards.append((item, image))
+
+        text = "官方新公告\n\n" + "\n\n".join(
             f"[{item['group_cn']}] {item['title']}\n{item['date_text']}"
-            for item in fresh[:5]
-        ]
-        text = "官方新公告\n\n" + "\n\n".join(lines)
-        if len(fresh) > 5:
-            text += f"\n\n……另有 {len(fresh) - 5} 条，发送 `ark公告` 查看全部"
+            for item in fresh
+        )
+        rest = len(fresh) - len(cards)
+        if rest > 0:
+            text += f"\n\n……另有 {rest} 条，发送 `ark公告` 查看全部"
+
         for sub in subs:
             umo = str(sub.get("umo") or "")
-            if umo:
+            if not umo:
+                continue
+            if not cards:
                 await self._notify(umo, text)
-        logger.info("[公告轮询] 推送了 %d 条新公告", len(fresh))
+                continue
+            await self._notify(umo, "官方新公告")
+            for item, image in cards:
+                header = f"[{item['group_cn']}] {item['title']}\n{item['date_text']}"
+                await self._notify(umo, header, image)
+            if rest > 0:
+                await self._notify(umo, f"……另有 {rest} 条，发送 `ark公告` 查看全部")
+        logger.info(
+            "[公告轮询] 推送了 %d 条新公告（附带 %d 张卡片）", len(fresh), len(cards)
+        )
 
     # ── 漏写唤醒前缀提醒 ───────────────────────────────────────────────────
     # 群聊里指令必须带唤醒前缀（本部署为 ~）。用户漏写时 AstrBot 不会唤醒

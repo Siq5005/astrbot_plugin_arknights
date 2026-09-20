@@ -10,6 +10,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from framework_stub import ensure_framework_logger  # noqa: E402
+
+ensure_framework_logger()
 
 
 from core.cards import build_note_context, build_sanity_context  # noqa: E402

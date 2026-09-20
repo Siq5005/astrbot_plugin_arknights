@@ -575,6 +575,46 @@ async def main() -> int:
     )
 
     await plugin.unsubscribe_announce(StubEvent("/ark取消订阅公告")).__anext__()
+
+    # The subscription push used to deliver titles only, which buried the
+    # artwork that announcements mostly consist of.
+    sent: list[list[str]] = []
+
+    async def capture(umo, chain):
+        sent.append([type(segment).__name__ for segment in chain.chain])
+
+    # the anchor above cancelled the subscription, so re-arm it first
+    await plugin.subscribe_announce(StubEvent("/ark订阅公告")).__anext__()
+    plugin.context = SimpleNamespace(send_message=capture)
+    plugin._announce.fetch = fake_announce
+    plugin._announce_primed = False
+    await plugin._announce_poll_job()
+    check("公告轮询首轮只登记不推送", sent == [], f"{sent}")
+
+    async def announce_with_new():
+        return [
+            {
+                "id": "9999",
+                "title": "[活动预告] 新活动即将开启",
+                "author": "【明日方舟】运营组",
+                "brief": "活动期间将开放活动关卡。",
+                "group": "ACTIVITY",
+                "group_cn": "活动",
+                "url": "https://ak.hypergryph.com/news/9999",
+                "ts": 1789600000,
+                "date_text": "2026-09-17 12:00",
+            },
+            *ANNOUNCE_FIXTURE,
+        ]
+
+    plugin._announce.fetch = announce_with_new
+    await plugin._announce_poll_job()
+    segments = [kind for group in sent for kind in group]
+    check("公告推送带上了详情卡图片", "Image" in segments, f"{sent}")
+    check("公告推送先发一条汇总文本", bool(sent) and "Plain" in sent[0], f"{sent}")
+
+    # leave the store as the following check expects it
+    await plugin.unsubscribe_announce(StubEvent("/ark取消订阅公告")).__anext__()
     check("公告订阅可取消", not await plugin.store.list_announce_subs())
 
     # CommandFilter only fires on an exact name or a name plus a space, so the

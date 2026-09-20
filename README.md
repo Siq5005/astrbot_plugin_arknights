@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.3.5-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.3.6-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -96,6 +96,7 @@ playwright install chromium
 | `sign_time` | string | `00:05` | 每日自动签到时间，格式 `HH:MM` |
 | `sanity_poll_interval` | int | `20` | 理智订阅轮询间隔（分钟），下限 10 分钟 |
 | `announce_poll_interval` | int | `30` | 公告订阅轮询间隔（分钟），下限 15 分钟 |
+| `announce_push_cards` | int | `3` | 公告推送附带详情卡的数量；前 N 条渲染为卡片（含配图），其余只给标题，`0` 表示全部只发文字 |
 | `gacha_cache_ttl` | int | `21600` | 抽卡记录缓存时间（秒）。该时间内直接用本地记录，不请求官网 |
 | `max_bindings` | int | `5` | 单用户最大绑定角色数，`0` 表示不限制 |
 
@@ -183,7 +184,7 @@ astrbot_plugin_arknights/
 |:-----|:-----|:-----|
 | `ark公告` | 公告列表（活动 / 系统分类、置顶标记） | 全部 |
 | `ark公告 <编号>` | 渲染指定公告的**详情卡片**（保留官方富文本排版与内嵌配图） | 全部 |
-| `ark订阅公告` / `ark取消订阅公告` | 有新公告时推送到**当前会话** | 全部 |
+| `ark订阅公告` / `ark取消订阅公告` | 有新公告时推送到**当前会话**，附公告详情卡（含官方配图） | 全部 |
 
 > 💡 发送 `ark帮助` 可查看图片版指令菜单。
 
@@ -353,6 +354,11 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.3.6 (2026-09-17)
+
+- ✨ **公告订阅推送附带详情卡**：原先只推送标题与时间，而公告正文主要就是图片，等于把内容丢了。现在新公告会渲染成详情卡（与 `ark公告 <编号>` 同一张卡，含官方配图）后推送，前 `announce_push_cards` 条（默认 3）出卡，其余保留标题列表
+- 📌 **说明公告源**：公告来自鹰角官网 `ak.hypergryph.com`。森空岛**没有**明日方舟公告接口（[社区 API 文档](https://github.com/ProbiusOfficial/Skland_API) 收录的只有账号、Cred、角色绑定、签到与玩家数据），终末地插件用的也是第三方协议终端而非森空岛
 
 ### 0.3.5 (2026-09-17)
 
