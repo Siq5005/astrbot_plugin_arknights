@@ -51,7 +51,7 @@ from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
-PLUGIN_VERSION = "0.3.6"
+PLUGIN_VERSION = "0.3.7"
 
 # Seconds the QR code stays valid, and how often it is polled.
 QR_TIMEOUT = 120
@@ -375,15 +375,26 @@ class ArknightsPlugin(Star):
         qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
         return buffer.getvalue()
 
-    async def _notify(self, umo: str, text: str, image: Path | None = None) -> None:
+    async def _notify(
+        self,
+        umo: str,
+        text: str,
+        image: Path | None = None,
+        mention: str | None = None,
+    ) -> None:
         """Send a message to a session outside the current event flow.
 
         Args:
             umo: Unified message origin of the target session.
             text: Message text.
             image: Optional rendered card appended after the text.
+            mention: Platform user id to @ before the text. Only meaningful in a
+                group session; callers decide whether to pass it.
         """
-        chain: list[Any] = [Plain(text)]
+        chain: list[Any] = []
+        if mention:
+            chain.append(At(qq=mention))
+        chain.append(Plain(text))
         if image is not None:
             chain.append(Image.fromFileSystem(str(image)))
         try:
@@ -1016,9 +1027,16 @@ class ArknightsPlugin(Star):
                 if self._sanity_notified.get(user_key):
                     continue
                 self._sanity_notified[user_key] = True
+                # A bare "sanity is full" says nothing in a group, so the role
+                # is named and the subscriber is mentioned.
+                nick = str(binding.get("nick_name") or "")
+                notice = (
+                    f"理智已回满（{sanity['current']} / {sanity['max']}），记得清体力。"
+                )
                 await self._notify(
                     umo,
-                    f"理智已回满（{sanity['current']} / {sanity['max']}），记得清体力。",
+                    f"{nick} 的{notice}" if nick else notice,
+                    mention=user_key if ":GroupMessage:" in umo else None,
                 )
             else:
                 self._sanity_notified[user_key] = False

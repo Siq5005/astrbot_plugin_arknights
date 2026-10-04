@@ -719,6 +719,42 @@ async def main() -> int:
         sanity_subs and "Group" in str(sanity_subs[0].get("umo")),
         f"{sanity_subs[0].get('umo') if sanity_subs else ''}",
     )
+    # Issue #1: in a group a bare "sanity is full" says nothing about whose it
+    # is, so the push names the role and mentions the subscriber.
+    sanity_sent: list[list] = []
+
+    async def capture_sanity(umo, chain):
+        sanity_sent.append(list(chain.chain))
+
+    async def fake_player(user, binding):
+        return {
+            "status": {"ap": {"current": 135, "max": 135, "completeRecoveryTime": 0}},
+            "charInfoMap": {},
+        }
+
+    # both are replaced below, so keep the originals for the later checks
+    original_player_data = plugin._player_data
+    original_context = plugin.context
+    plugin.context = SimpleNamespace(send_message=capture_sanity)
+    plugin._player_data = fake_player
+    plugin._sanity_notified.clear()
+    await plugin._sanity_poll_job()
+    pushed = sanity_sent[0] if sanity_sent else []
+    check(
+        "理智回满推送 @ 了订阅者",
+        any(type(segment).__name__ == "At" for segment in pushed),
+        f"{[type(segment).__name__ for segment in pushed]}",
+    )
+    pushed_text = "".join(str(getattr(segment, "text", "")) for segment in pushed)
+    check(
+        "理智回满推送写明了是哪个角色",
+        "探姬" in pushed_text,
+        pushed_text,
+    )
+
+    plugin._player_data = original_player_data
+    plugin.context = original_context
+
     await plugin.unsubscribe_sanity(StubEvent("/ark取消订阅理智")).__anext__()
 
     # Operator detail by argument; the form deliberately does not end in 面板 so

@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.3.6-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.3.7-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -175,7 +175,7 @@ astrbot_plugin_arknights/
 | `ark抽卡分析 同步`（或 `ark抽卡同步`） | 忽略缓存，强制重新同步官网记录 | 全部 |
 | `ark抽卡重置` | 清空该角色在本机保存的抽卡记录 | 全部 |
 | `ark签到` | 手动执行森空岛签到 | 全部 |
-| `ark订阅理智` / `ark取消订阅理智` | 理智回满时推送到**当前会话**（群聊订阅就推到群） | 全部 |
+| `ark订阅理智` / `ark取消订阅理智` | 理智回满时推送到**当前会话**；群聊里会 **@订阅者** 并写明是哪个角色 | 全部 |
 | `ark订阅签到` / `ark取消订阅签到` | 群内自动签到结果通知 | 群聊 |
 
 ### 📢 官方公告
@@ -354,6 +354,10 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.3.7 (2026-09-23)
+
+- 🐛 **修复群聊理智提醒不显示是谁的账号**（[#1](https://github.com/Siq5005/astrbot_plugin_arknights/issues/1)）：原先推送文案固定为「理智已回满（x / y），记得清体力。」，在群里完全看不出是谁的提醒。现在**写明角色名**（如 `探姬#9315 的理智已回满…`）并在群聊中 **@ 订阅者本人**；私聊不加 @（无意义）
 
 ### 0.3.6 (2026-09-17)
 
