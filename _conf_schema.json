@@ -57,5 +57,11 @@
     "type": "int",
     "default": 3,
     "hint": "新公告推送时，前 N 条渲染为详情卡（含官方配图）；其余只给标题。设为 0 则全部只发文字"
+  },
+  "announce_max_age_hours": {
+    "description": "公告推送时间窗口(小时)",
+    "type": "int",
+    "default": 24,
+    "hint": "只推送发布时间在该窗口内的公告，避免把窗口边缘的旧条目当成新公告"
   }
 }

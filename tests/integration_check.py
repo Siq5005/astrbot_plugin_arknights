@@ -581,37 +581,76 @@ async def main() -> int:
     sent: list[list[str]] = []
 
     async def capture(umo, chain):
-        sent.append([type(segment).__name__ for segment in chain.chain])
+        # keep the segments themselves, not just their type names, so the
+        # text of each message can be asserted on
+        sent.append(list(chain.chain))
 
     # the anchor above cancelled the subscription, so re-arm it first
     await plugin.subscribe_announce(StubEvent("/ark订阅公告")).__anext__()
     plugin.context = SimpleNamespace(send_message=capture)
-    plugin._announce.fetch = fake_announce
-    plugin._announce_primed = False
+    recent = int(time.time()) - 3600  # one hour ago, inside the default window
+
+    def announcement(ident, ts, title):
+        return {
+            "id": ident,
+            "title": title,
+            "author": "【明日方舟】运营组",
+            "brief": "活动期间将开放活动关卡。",
+            "group": "ACTIVITY",
+            "group_cn": "活动",
+            "url": f"https://ak.hypergryph.com/news/{ident}",
+            "ts": ts,
+            "date_text": "2026-10-09 12:00",
+        }
+
+    # Prime with a feed whose newest entry is ten days old. The watermark then
+    # starts *behind* the stale entry below, so the age window — not the
+    # watermark — is what has to stop it.
+    async def announce_stale_only():
+        return [announcement("7777", int(time.time()) - 240 * 3600, "[旧] 十天前")]
+
+    plugin._announce.fetch = announce_stale_only
     await plugin._announce_poll_job()
     check("公告轮询首轮只登记不推送", sent == [], f"{sent}")
+    check(
+        "首轮写入了水位线",
+        await plugin.store.announce_watermark() > 0,
+        f"{await plugin.store.announce_watermark()}",
+    )
 
+    # Simulates coming back after downtime: one entry published while the bot
+    # was down (newer than the watermark but well outside the window) and one
+    # published just now. Only the fresh one may go out.
     async def announce_with_new():
         return [
-            {
-                "id": "9999",
-                "title": "[活动预告] 新活动即将开启",
-                "author": "【明日方舟】运营组",
-                "brief": "活动期间将开放活动关卡。",
-                "group": "ACTIVITY",
-                "group_cn": "活动",
-                "url": "https://ak.hypergryph.com/news/9999",
-                "ts": 1789600000,
-                "date_text": "2026-09-17 12:00",
-            },
-            *ANNOUNCE_FIXTURE,
+            announcement(
+                "8888", int(time.time()) - 120 * 3600, "[旧] 停机期间的旧公告"
+            ),
+            announcement("9999", recent, "[活动预告] 新活动即将开启"),
         ]
 
     plugin._announce.fetch = announce_with_new
     await plugin._announce_poll_job()
-    segments = [kind for group in sent for kind in group]
-    check("公告推送带上了详情卡图片", "Image" in segments, f"{sent}")
-    check("公告推送先发一条汇总文本", bool(sent) and "Plain" in sent[0], f"{sent}")
+    segments = [type(segment).__name__ for group in sent for segment in group]
+    check("公告推送带上了详情卡图片", "Image" in segments, f"{segments}")
+    check(
+        "公告推送先发一条汇总文本",
+        bool(sent) and type(sent[0][0]).__name__ == "Plain",
+        f"{segments}",
+    )
+    pushed_text = " ".join(
+        str(getattr(segment, "text", "")) for group in sent for segment in group
+    )
+    check(
+        "超出时间窗口的旧公告不会被推送",
+        "停机期间" not in pushed_text and "新活动" in pushed_text,
+        pushed_text[:160],
+    )
+
+    # The watermark is persisted, so polling again re-sends nothing.
+    sent.clear()
+    await plugin._announce_poll_job()
+    check("同一公告不会重复推送", sent == [], f"{sent}")
 
     # leave the store as the following check expects it
     await plugin.unsubscribe_announce(StubEvent("/ark取消订阅公告")).__anext__()

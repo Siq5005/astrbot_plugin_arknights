@@ -33,13 +33,14 @@ DETAIL_URL = "https://ak.hypergryph.com/news/{cid}"
 # is a stable anchor; the surrounding class names are per-build hashes.
 DATE_MARKER_RE = re.compile(r"\d{4}\s*//\s*\d{1,2}\s*/\s*\d{1,2}")
 
-# Group keys inside the page payload, in display order. LATEST aggregates the
-# others and is skipped so nothing is listed twice.
-GROUP_KEYS: tuple[str, ...] = ("ANNOUNCEMENT", "ACTIVITY", "NEWS")
+# The page renders several category feeds side by side, each capped at its own
+# newest handful while carrying hundreds of older entries. LATEST is the site's
+# own "latest" feed (total=12, end=true) and is the only one that answers "what
+# is new"; the category feeds reach back months, so a boundary entry drifting in
+# or out of them looked like a fresh announcement.
+GROUP_KEYS: tuple[str, ...] = ("LATEST",)
 GROUP_CN: dict[str, str] = {
-    "ANNOUNCEMENT": "公告",
-    "ACTIVITY": "活动",
-    "NEWS": "资讯",
+    "LATEST": "公告",
 }
 UNKNOWN_GROUP_CN = "公告"
 
@@ -188,7 +189,17 @@ def parse_list(page: str) -> list[dict[str, Any]]:
         marker = re.search(r'\\"' + group + r'\\":\{\\"list\\":\[', page)
         if not marker:
             continue
-        for blob in _ITEM_RE.finditer(page[marker.end() :]):
+        segment = page[marker.end() :]
+        # A list closes with ']' immediately before its own total/end fields.
+        # Bounding the slice matters: scanning to the end of the page runs on
+        # into the following category feeds, which is how a 12 entry feed
+        # turned into 36 entries reaching back months.
+        total_at = segment.find('\\"total\\":')
+        if total_at > 0:
+            list_end = segment.rfind("]", 0, total_at)
+            if list_end > 0:
+                segment = segment[:list_end]
+        for blob in _ITEM_RE.finditer(segment):
             cid, stamp, brief = blob.group(1), blob.group(2), blob.group(3)
             if cid in seen:
                 continue

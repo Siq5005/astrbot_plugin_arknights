@@ -51,7 +51,7 @@ from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
-PLUGIN_VERSION = "0.3.7"
+PLUGIN_VERSION = "0.3.8"
 
 # Seconds the QR code stays valid, and how often it is polled.
 QR_TIMEOUT = 120
@@ -207,9 +207,6 @@ class ArknightsPlugin(Star):
         self._gacha = GachaClient()
         self._gacha_store = GachaStore()
         self._announce = AnnounceClient()
-        # Announcement ids already pushed, so a restart does not resend them.
-        self._announce_seen: set[str] = set()
-        self._announce_primed = False
         # user_key -> whether a sanity-full notice has already been sent
         self._sanity_notified: dict[str, bool] = {}
         self.scheduler: AsyncIOScheduler | None = None
@@ -1597,10 +1594,13 @@ class ArknightsPlugin(Star):
         yield event.plain_result("已取消公告订阅。")
 
     async def _announce_poll_job(self) -> None:
-        """Push announcements that appeared since the last check.
+        """Push announcements published within the configured window.
 
-        The first run only records the current newest id, so enabling the
-        subscription never fires a burst of historical announcements.
+        Freshness is decided by a persisted timestamp watermark plus an age
+        window, not by a set of ids held in memory. A restart therefore neither
+        re-sends what already went out nor drops what arrived while the bot was
+        down, and an entry drifting across the feed boundary can never be
+        announced months late.
         """
         subs = await self.store.list_announce_subs()
         if not subs:
@@ -1613,16 +1613,34 @@ class ArknightsPlugin(Star):
         if not records:
             return
 
-        if not self._announce_primed:
-            self._announce_seen.update(item["id"] for item in records)
-            self._announce_primed = True
-            logger.info("[公告轮询] 已初始化，当前共 %d 条公告", len(records))
+        now = time.time()
+        hours = max(1, int(self.config.get("announce_max_age_hours", 24) or 24))
+        window = hours * 3600
+        watermark = await self.store.announce_watermark()
+        newest = max((int(item["ts"]) for item in records), default=0)
+
+        if watermark == 0:
+            # First poll ever: adopt the current newest without pushing, so
+            # enabling the subscription does not replay the last day at once.
+            if newest:
+                await self.store.set_announce_watermark(newest)
+            logger.info(
+                "[公告轮询] 已初始化，当前 %d 条，水位线 %d", len(records), newest
+            )
             return
 
-        fresh = [item for item in records if item["id"] not in self._announce_seen]
+        # The window is what keeps an entry sitting on the edge of the feed from
+        # being announced months late; the watermark keeps a restart from
+        # re-sending what already went out.
+        fresh = [
+            item
+            for item in records
+            if int(item["ts"]) > watermark and 0 < now - int(item["ts"]) <= window
+        ]
+        if newest > watermark:
+            await self.store.set_announce_watermark(newest)
         if not fresh:
             return
-        self._announce_seen.update(item["id"] for item in fresh)
 
         # Announcements are mostly artwork, so a title-only push buries the
         # actual content. The first few are delivered as rendered cards (the

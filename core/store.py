@@ -36,7 +36,11 @@ def _default_path() -> Path:
 
 def _empty() -> dict[str, Any]:
     """Return a freshly initialized store structure."""
-    return {"users": {}, "subs": {"sanity": [], "sign_groups": [], "announce": []}}
+    return {
+        "users": {},
+        "subs": {"sanity": [], "sign_groups": [], "announce": []},
+        "announce": {"watermark": 0},
+    }
 
 
 class Store:
@@ -85,6 +89,8 @@ class Store:
         subs.setdefault("sanity", [])
         subs.setdefault("sign_groups", [])
         subs.setdefault("announce", [])
+        if not isinstance(data.get("announce"), dict):
+            data["announce"] = {"watermark": 0}
         return data
 
     def _write(self, data: dict[str, Any]) -> None:
@@ -329,4 +335,24 @@ class Store:
             if enabled:
                 subs.append({"user_key": user_key, "umo": str(umo)})
             data["subs"]["announce"] = subs
+            self._write(data)
+
+    async def announce_watermark(self) -> int:
+        """Return the newest announcement timestamp already accounted for.
+
+        Returns:
+            Unix timestamp, or ``0`` when the feed has never been polled.
+        """
+        async with self._lock:
+            return int((self._read().get("announce") or {}).get("watermark") or 0)
+
+    async def set_announce_watermark(self, stamp: int) -> None:
+        """Persist the newest announcement timestamp already accounted for.
+
+        Args:
+            stamp: Unix timestamp to remember.
+        """
+        async with self._lock:
+            data = self._read()
+            data["announce"] = {"watermark": int(stamp)}
             self._write(data)

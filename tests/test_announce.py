@@ -22,16 +22,24 @@ def escaped(payload: str) -> str:
 NEWS_PAGE = (
     "<html><script>window.x = '"
     + escaped(
-        '{"ANNOUNCEMENT":{"list":['
+        '{"LATEST":{"list":['
+        '{"cid":"9999","tab":"0","sticky":false,'
+        '"title":"[活动预告] 新活动即将开启",'
+        '"author":"【明日方舟】运营组","displayTime":1791000000,'
+        '"cover":"","extraCover":"","brief":"活动期间将开放活动关卡。"},'
         '{"cid":"7367","tab":"0","sticky":false,'
         '"title":"[明日方舟]09月11日16:00闪断更新公告",'
         '"author":"【明日方舟】运营组","displayTime":1789095600,'
-        '"cover":"","extraCover":"","brief":"计划将于09月11日进行服务器闪断更新。"},'
-        '{"cid":"9681","tab":"0","sticky":false,'
-        '"title":"[活动预告]「月行水上」限时活动即将开启",'
-        '"author":"【明日方舟】运营组","displayTime":1787900000,'
-        '"cover":"","extraCover":"","brief":"活动期间将开放活动关卡。"}'
-        "]}}"
+        '"cover":"","extraCover":"","brief":"计划将于09月11日进行服务器闪断更新。"}'
+        '],"total":12,"end":true,"map":{"1":[{"cid":"7777"}]}},'
+        # A following category feed whose entries reach back months. Bounding
+        # the LATEST slice is what keeps them out.
+        '"ACTIVITY":{"list":['
+        '{"cid":"0001","tab":"1","sticky":false,'
+        '"title":"[旧] 半年前的旧活动",'
+        '"author":"【明日方舟】运营组","displayTime":1700000000,'
+        '"cover":"","extraCover":"","brief":"早就结束了。"}'
+        '],"total":239,"end":false,"map":{}}}'
     )
     + "'</script></html>"
 )
@@ -78,25 +86,36 @@ def test_classify_prefers_system_then_activity():
 
 def test_parse_list_reads_the_embedded_payload():
     records = parse_list(NEWS_PAGE)
-    assert [r["id"] for r in records] == ["7367", "9681"]
+    assert [r["id"] for r in records] == ["9999", "7367"]
     first = records[0]
-    assert first["title"] == "[明日方舟]09月11日16:00闪断更新公告"
+    assert first["title"] == "[活动预告] 新活动即将开启"
     assert first["author"] == "【明日方舟】运营组"
-    assert first["group"] == "SYSTEM"
-    assert first["group_cn"] == "系统"
-    assert first["ts"] == 1789095600
+    assert first["group_cn"] == "活动"
+    assert first["ts"] == 1791000000
     assert first["date_text"].startswith("2026-")
-    assert records[1]["group_cn"] == "活动"
+    assert records[1]["group_cn"] == "系统"
     # newest first
     assert records[0]["ts"] > records[1]["ts"]
 
 
-def test_parse_list_ignores_the_latest_aggregate():
-    page = "<x>" + escaped(
-        '{"LATEST":{"list":[{"cid":"1","displayTime":100,'
-        '"title":"t","author":"a","brief":"b"}]}}'
-    )
-    assert parse_list(page) == []
+def test_parse_list_stops_at_the_end_of_its_own_list():
+    """LATEST is the site's latest feed, and its slice must not bleed on.
+
+    Scanning to the end of the page made a 12 entry feed yield 36, reaching
+    months back — the entries of every following category feed were swallowed.
+    """
+    records = parse_list(NEWS_PAGE)
+    # 7777 only exists in the map field of the next payload block; if the slice
+    # is not bounded, the scan reaches it and fabricates an entry.
+    assert [r["id"] for r in records] == ["9999", "7367"]
+    assert "7777" not in [r["id"] for r in records]
+    assert all("旧活动" not in r["title"] for r in records)
+
+
+def test_latest_is_the_only_group_parsed():
+    from core.announce import GROUP_KEYS
+
+    assert GROUP_KEYS == ("LATEST",)
 
 
 def test_parse_list_handles_a_missing_payload():

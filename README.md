@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.3.7-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.3.8-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -97,6 +97,7 @@ playwright install chromium
 | `sanity_poll_interval` | int | `20` | 理智订阅轮询间隔（分钟），下限 10 分钟 |
 | `announce_poll_interval` | int | `30` | 公告订阅轮询间隔（分钟），下限 15 分钟 |
 | `announce_push_cards` | int | `3` | 公告推送附带详情卡的数量；前 N 条渲染为卡片（含配图），其余只给标题，`0` 表示全部只发文字 |
+| `announce_max_age_hours` | int | `24` | 公告推送时间窗口（小时）。只推送发布时间在窗口内的公告 |
 | `gacha_cache_ttl` | int | `21600` | 抽卡记录缓存时间（秒）。该时间内直接用本地记录，不请求官网 |
 | `max_bindings` | int | `5` | 单用户最大绑定角色数，`0` 表示不限制 |
 
@@ -355,6 +356,15 @@ astrbot_plugin_arknights/
 <details>
 <summary>点击展开版本历史</summary>
 
+### 0.3.8 (2026-10-09)
+
+- 🐛 **修复公告推送把几个月前的旧条目当成「新公告」**（[#2](https://github.com/Siq5005/astrbot_plugin_arknights/issues/2)），共四处改动：
+
+  - **公告源改用 `LATEST` 分组**：原先取 `ANNOUNCEMENT + ACTIVITY + NEWS` 三组并集。官网每个分类各自有几百条历史、页面只渲染各自最新的 12 条，于是拿到的是横跨数月乃至去年的约 36 条。`LATEST` 才是官网定义的「最新 12 条」（`total=12, end=true`）
+  - **修复列表解析越界**：原先从分组标记一直扫描到页面末尾，会把**后续所有分组**的条目一并吞掉 —— 这才是「36 条」的真正来源。现在按各分组自己的 `total` / `end` 字段定位列表结束（此问题由 #2 的排查顺带暴露）
+  - **新增 24 小时推送窗口**（`announce_max_age_hours`，默认 24）：只推送发布时间在窗口内的公告，杜绝窗口边缘的旧条目被晚推
+  - **公告水位线改为落盘**：原先以内存中的 id 集合判断新旧、重启即丢状态。现在持久化时间水位线，重启既不重推已发出的，也不会丢掉停机期间到达的新公告
+
 ### 0.3.7 (2026-09-23)
 
 - 🐛 **修复群聊理智提醒不显示是谁的账号**（[#1](https://github.com/Siq5005/astrbot_plugin_arknights/issues/1)）：原先推送文案固定为「理智已回满（x / y），记得清体力。」，在群里完全看不出是谁的提醒。现在**写明角色名**（如 `探姬#9315 的理智已回满…`）并在群聊中 **@ 订阅者本人**；私聊不加 @（无意义）
@@ -465,7 +475,7 @@ astrbot_plugin_arknights/
 | 抽卡记录 | 鹰角官网 `ak.hypergryph.com` |
 | 卡池元数据（名称 / 时间 / 规则类型） | `yuanyan3060/ArknightsGameResource` 的 `gacha_table.json` |
 | 卡池 UP 名单 | PRTS `weedy.prts.wiki/gacha_table.json` |
-| 官方公告 | 官网 `ak.hypergryph.com/news`（列表与正文均从页面解析；原 `ak-conf.hypergryph.com` 的配置自 2025-05 起未再更新，已弃用） |
+| 官方公告 | 官网 `ak.hypergryph.com/news` 的 **`LATEST`** 分组（官网定义的「最新 12 条」）；正文取自详情页。原 `ak-conf.hypergryph.com` 的配置自 2025-05 起未再更新，已弃用 |
 
 > 本项目与鹰角网络、PRTS Wiki、上述资源仓库无隶属关系，仅使用其公开资源；如相关方有异议会立即移除。
 
