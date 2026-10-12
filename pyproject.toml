@@ -7,6 +7,15 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 88
 target-version = "py310"
+# Ruff 0.16 also formats Python code blocks embedded in Markdown. The plan
+# documents under docs/ contain fragments meant to be pasted *inside* a class or
+# a function body, so formatting them as standalone files strips their leading
+# indentation and silently changes the code they describe. Keep the formatter
+# and the linter out of Markdown entirely.
+extend-exclude = ["**/*.md"]
+# Without this, an explicitly passed path (e.g. `ruff format docs/plan.md`)
+# ignores the exclude above and reformats the plan document.
+force-exclude = true
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
