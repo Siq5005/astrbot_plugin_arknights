@@ -1,0 +1,11 @@
+# Append this as a new site block at the END of /etc/caddy/Caddyfile. It is a
+# dedicated host, so nothing else matches it and no path prefix is needed —
+# Caddy issues the certificate for ark.youyou.ink on first request.
+#
+# Requires a DNS A record: ark.youyou.ink -> 162.211.183.29
+ark.youyou.ink {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8788 {
+		header_up X-Forwarded-Proto https
+	}
+}

@@ -1,0 +1,18 @@
+[Unit]
+Description=Arknights announcement aggregator (arknights AstrBot plugin)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/arksource
+EnvironmentFile=/opt/arksource/arksource.env
+ExecStart=/opt/arksource/venv/bin/python -m app
+Restart=always
+RestartSec=5
+User=root
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
