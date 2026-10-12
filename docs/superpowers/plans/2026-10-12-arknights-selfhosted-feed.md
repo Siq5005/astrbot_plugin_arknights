@@ -662,10 +662,9 @@ from app.feed import FeedError, fetch_official
 class _FakeSkland:
     """Minimal stand-in for SklandClient, recording requested URLs."""
 
-    def __init__(self, pages, user_token="tok"):
+    def __init__(self, pages):
         self._pages = pages
         self.urls = []
-        self.user_token = user_token
 
     async def get_device_id(self):
         return "did"
