@@ -945,10 +945,7 @@ class FeedCache:
         """Refresh on a fixed interval until cancelled."""
         while True:
             await self.refresh()
-            try:
-                await asyncio.sleep(self.settings.poll_interval_seconds)
-            except asyncio.CancelledError:
-                raise
+            await asyncio.sleep(self.settings.poll_interval_seconds)
 ```
 
 - [ ] **Step 4: 运行测试确认通过**
