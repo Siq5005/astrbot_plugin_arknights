@@ -722,7 +722,7 @@ def anyio_backend():
 - [ ] **Step 6: 运行全部服务端测试**
 
 Run: `cd server && /Users/coe/project/AstrBot/.venv/bin/python -m pytest tests -q`
-Expected: PASS（8 passed）
+Expected: PASS（10 passed = 本任务的 8 条 + Task 1 的 2 条 settings 测试）
 
 - [ ] **Step 7: 提交**
 
