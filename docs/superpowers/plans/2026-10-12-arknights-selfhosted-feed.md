@@ -89,7 +89,7 @@
 
 **Interfaces:**
 - Consumes: 无（第一个任务）
-- Produces: `Settings` 数据类，字段 `api_key: str`、`user_token: str`、`credential_file: Path`、`state_file: Path`、`poll_interval_seconds: int`、`window_hours: int`、`host: str`、`port: int`、`stale_minutes: int`；类方法 `Settings.from_env() -> Settings`。`skland_client.SklandClient` 与 `hypergryph_client.HypergryphClient` 保持与插件内同名类完全一致的公开方法。
+- Produces: `Settings` 数据类，字段 `api_key: str`、`credential_file: Path`、`state_file: Path`、`poll_interval_seconds: int`、`window_hours: int`、`host: str`、`port: int`、`stale_minutes: int`（共 8 个；护照 token 不属于 `Settings`，它在 Task 4 由 `credentials.load_user_token` 从凭证文件读取）；类方法 `Settings.from_env() -> Settings`。`skland_client.SklandClient` 与 `hypergryph_client.HypergryphClient` 保持与插件内同名类完全一致的公开方法。
 
 - [ ] **Step 1: 写失败的测试**
 
