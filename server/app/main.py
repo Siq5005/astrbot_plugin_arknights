@@ -7,11 +7,10 @@ Two endpoints: ``/api/ark/v1/feed`` for the plugin (API-key gated) and
 from __future__ import annotations
 
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Header, Request
+from fastapi import FastAPI, Header
 from fastapi.responses import JSONResponse
 
 from .cache import FeedCache
@@ -19,8 +18,6 @@ from .credentials import load_user_token
 from .feed import fetch_official
 from .settings import Settings
 from .skland_client import SklandClient
-
-logger = logging.getLogger(__name__)
 
 Fetcher = Any
 
@@ -100,7 +97,7 @@ def create_app(
         }
 
     @app.get("/api/ark/v1/feed")
-    async def feed(request: Request, x_api_key: str = Header(default="")):
+    async def feed(x_api_key: str = Header(default="")):
         """Return the normalised official feed."""
         expected = resolved.api_key
         if not expected or x_api_key != expected:

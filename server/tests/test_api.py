@@ -81,3 +81,18 @@ async def test_health_is_not_gated_and_reports_staleness():
 
     assert response.status_code == 200
     assert response.json()["data"]["stale"] is True
+
+
+@pytest.mark.anyio
+async def test_feed_rejects_when_no_key_is_configured():
+    """An unconfigured service must never accept a request."""
+
+    async def fetcher():
+        return []
+
+    blank = _settings(api_key="")
+    cache = FeedCache(blank, fetcher=fetcher)
+    async with _client(cache, blank) as client:
+        response = await client.get("/api/ark/v1/feed", headers={"X-API-Key": ""})
+
+    assert response.status_code == 401
