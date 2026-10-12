@@ -13,6 +13,7 @@ alongside a ``hasMore`` flag.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 ZONAI_BASE = "https://zonai.skland.com"
@@ -148,10 +149,15 @@ def normalize(
     except (TypeError, ValueError):
         published_at = 0
 
+    try:
+        kind = int(source.get("viewKind") or item.get("viewKind") or 0)
+    except (TypeError, ValueError):
+        kind = 0
+
     return {
         "id": item_id,
         "title": str(source.get("title") or item.get("title") or ""),
-        "kind": int(source.get("viewKind") or item.get("viewKind") or 0),
+        "kind": kind,
         "published_at": published_at,
         "cover": cover,
         "images": images,
@@ -181,8 +187,6 @@ async def fetch_official(
     Raises:
         FeedError: When the feed cannot be read or paged.
     """
-    import time
-
     did = await client.get_device_id()
     authorization = await client.get_authorization(user_token)
     cred = await client.get_credential(authorization)
@@ -213,7 +217,9 @@ async def fetch_official(
                 message = str(payload.get("message") or "")
             raise FeedError(f"森空岛接口返回异常: {message or payload}")
 
-        data = payload.get("data") or {}
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise FeedError("森空岛接口响应缺少 data")
         rows = data.get("list") or []
         if not rows:
             break

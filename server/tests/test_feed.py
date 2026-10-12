@@ -1,5 +1,7 @@
 """Feed normalisation is pure, so it is tested without touching the network."""
 
+import time
+
 import pytest
 from app.feed import FeedError, document_to_text, fetch_official, normalize
 
@@ -152,3 +154,84 @@ async def test_fetch_official_raises_on_business_error():
 
     with pytest.raises(FeedError, match="参数错误"):
         await fetch_official(fake, "tok")
+
+
+@pytest.mark.anyio
+async def test_fetch_official_follows_page_token_dedupes_and_orders_newest_first():
+    now = int(time.time())
+    oldest_id = "page-one-oldest"
+    duplicate_id = "repeated-across-pages"
+    newest_id = "page-two-newest"
+    fake = _FakeSkland(
+        [
+            {
+                "code": 0,
+                "data": {
+                    "list": [
+                        {
+                            "item": {
+                                "id": oldest_id,
+                                "title": "first page, older",
+                                "viewKind": 1,
+                                "publishedAtTs": now - 600,
+                            }
+                        },
+                        {
+                            "item": {
+                                "id": duplicate_id,
+                                "title": "first page, repeated later",
+                                "viewKind": 1,
+                                "publishedAtTs": now - 120,
+                            }
+                        },
+                    ],
+                    "hasMore": True,
+                    "pageToken": "page-2-token",
+                },
+            },
+            {
+                "code": 0,
+                "data": {
+                    "list": [
+                        {
+                            "item": {
+                                "id": newest_id,
+                                "title": "second page, newest",
+                                "viewKind": 1,
+                                "publishedAtTs": now - 60,
+                            }
+                        },
+                        {
+                            "item": {
+                                "id": duplicate_id,
+                                "title": "second page, repeated",
+                                "viewKind": 1,
+                                "publishedAtTs": now - 120,
+                            }
+                        },
+                    ],
+                    "hasMore": False,
+                    "pageToken": "",
+                },
+            },
+        ]
+    )
+
+    records = await fetch_official(fake, "tok", now=now)
+
+    # One upstream request per page served.
+    assert len(fake.urls) == 2
+    # The second request carries the token the first page returned.
+    assert "pageToken" not in fake.urls[0]
+    assert "pageToken=page-2-token" in fake.urls[1]
+    # Newest first, regardless of the order the pages arrived in.
+    assert [record["id"] for record in records] == [
+        newest_id,
+        duplicate_id,
+        oldest_id,
+    ]
+    assert [record["published_at"] for record in records] == sorted(
+        (record["published_at"] for record in records), reverse=True
+    )
+    # An id repeated across pages is emitted once.
+    assert [record["id"] for record in records].count(duplicate_id) == 1
