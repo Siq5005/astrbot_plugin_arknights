@@ -363,19 +363,39 @@ class GachaClient:
         return records
 
 
+# The official history endpoint reports milliseconds, while fixtures and some
+# responses use seconds. Anything above this bound is treated as milliseconds.
+_MILLISECONDS_ABOVE = 10_000_000_000
+
+
+def to_seconds(gacha_ts: Any) -> int:
+    """Normalize a gacha timestamp to seconds.
+
+    Args:
+        gacha_ts: Timestamp in seconds or milliseconds.
+
+    Returns:
+        Whole seconds, or ``0`` when the value is unusable.
+    """
+    try:
+        value = int(gacha_ts or 0)
+    except (TypeError, ValueError):
+        return 0
+    if value <= 0:
+        return 0
+    return value // 1000 if value > _MILLISECONDS_ABOVE else value
+
+
 def format_record_time(gacha_ts: Any) -> str:
     """Format a record timestamp.
 
     Args:
-        gacha_ts: Unix timestamp in seconds.
+        gacha_ts: Unix timestamp in seconds or milliseconds.
 
     Returns:
-        ``MM-DD HH:MM``, or an empty string when the value is unusable.
+        ``YYYY-MM-DD HH:MM``, or an empty string when the value is unusable.
     """
-    try:
-        seconds = int(gacha_ts or 0)
-    except (TypeError, ValueError):
-        return ""
+    seconds = to_seconds(gacha_ts)
     if seconds <= 0:
         return ""
     try:
@@ -531,9 +551,9 @@ def _summarize(
     total = len(records)
     six_total = counts[SIX_STAR]
     stamps = [
-        int(item.get("gachaTs") or 0)
+        to_seconds(item.get("gachaTs"))
         for item in records
-        if int(item.get("gachaTs") or 0) > 0
+        if to_seconds(item.get("gachaTs")) > 0
     ]
     date_range = ""
     if stamps:
@@ -558,18 +578,55 @@ def _summarize(
     }
 
 
+# Pools without a fixed rate-up list each have their own reason, and saying so
+# is more useful than a generic "no data" line.
+UP_MISSING_REASONS: dict[str, str] = {
+    "定向甄选": "定向甄选由玩家自选 UP 干员，官方数据不含固定 UP 名单，因此不做 UP / 歪判定",
+    "标准寻访": "数据源未收录常驻标准寻访的 UP 干员，因此不做 UP / 歪判定（避免误判）",
+}
+UP_MISSING_DEFAULT = "该卡池没有可用的 UP 名单，因此不做 UP / 歪判定（避免误判）"
+
+
+def _up_names(pool_id: str, gamedata: Any, char_info: dict[str, Any]) -> list[str]:
+    """Resolve a pool's rate-up six stars to display names.
+
+    Args:
+        pool_id: Pool identifier.
+        gamedata: Optional :class:`~core.gamedata.GameData`.
+        char_info: Optional ``charInfoMap``.
+
+    Returns:
+        Operator names, falling back to the raw ids.
+    """
+    if gamedata is None:
+        return []
+    names = []
+    for char_id in gamedata.up_six(pool_id):
+        # The static name table is authoritative and covers operators the
+        # account does not own — which is exactly the case for a new rate-up
+        # operator. ``charInfoMap`` is only a fallback for whatever the table
+        # has not learned yet; omit anything unresolvable rather than printing
+        # a raw id at the reader.
+        name = gamedata.char_name(char_id) or str(
+            (char_info.get(char_id) or {}).get("name") or ""
+        )
+        if name:
+            names.append(name)
+    return names
+
+
 def analyze(
     records: list[dict[str, Any]],
     gamedata: Any = None,
     char_info: dict[str, Any] | None = None,
     recent_limit: int = 12,
 ) -> dict[str, Any]:
-    """Compute headhunting statistics, overall and per banner family.
+    """Compute headhunting statistics, overall and for every banner.
 
-    Records are split by banner family first and summarized independently, then
-    summarized once more as a whole. The per-family figures are the meaningful
-    ones for pity and average pulls; the overall figures are kept for the card
-    header.
+    Records are split by pool first and summarized independently, then
+    summarized once more as a whole. Each banner keeps its own section so a
+    pool's records can never look like another pool's; the overall figures are
+    kept for the card header.
 
     Args:
         records: Records as returned by :meth:`GachaClient.fetch_records`.
@@ -586,20 +643,32 @@ def analyze(
         key=lambda item: (int(item.get("gachaTs") or 0), int(item.get("pos") or 0)),
     )
 
-    families: dict[str, dict[str, Any]] = {}
+    # One section per banner. Grouping by family instead merged every rotation
+    # of a pool type into a single block whose per-pool rows then carried the
+    # same generic name ("适合多种场合的强力干员"), which reads as one pool's
+    # records mixed into another.
+    pools: dict[str, dict[str, Any]] = {}
     for record in ordered:
-        key, label = banner_group(str(record.get("poolId") or ""))
-        bucket = families.setdefault(key, {"label": label, "records": []})
+        pool_id = str(record.get("poolId") or "")
+        _, family = banner_group(pool_id)
+        bucket = pools.setdefault(pool_id, {"family": family, "records": []})
         bucket["records"].append(record)
 
     context = _summarize(ordered, gamedata, char_info, recent_limit)
     context["luck"] = _luck_label(context["avg_six"], context["six_total"])
 
     banners = []
-    for key, bucket in families.items():
+    for pool_id, bucket in pools.items():
         summary = _summarize(bucket["records"], gamedata, char_info, recent_limit)
-        summary["key"] = key
-        summary["label"] = bucket["label"]
+        summary["key"] = pool_id
+        summary["label"] = gamedata.pool_name(pool_id) if gamedata else pool_id
+        summary["family"] = bucket["family"]
+        summary["up_names"] = _up_names(pool_id, gamedata, char_info)
+        summary["up_note"] = (
+            ""
+            if summary["up_known"]
+            else UP_MISSING_REASONS.get(summary["family"], UP_MISSING_DEFAULT)
+        )
         summary["luck"] = _luck_label(summary["avg_six"], summary["six_total"])
         summary["newest"] = max(
             (int(item.get("gachaTs") or 0) for item in bucket["records"]), default=0

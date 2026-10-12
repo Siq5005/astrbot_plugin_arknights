@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,13 @@ META_URLS = (
     "https://raw.githubusercontent.com/yuanyan3060/ArknightsGameResource/main/gamedata/excel/gacha_table.json",
 )
 UP_URLS = ("https://weedy.prts.wiki/gacha_table.json",)
+# Operator names live in a 14 MB table that compresses to roughly 490 KB
+# over the wire. Only the id -> name pairs are kept, and that compact map
+# is what gets cached, so the disk never holds the full table.
+NAME_URLS = (
+    "https://cdn.jsdelivr.net/gh/yuanyan3060/ArknightsGameResource@main/gamedata/excel/character_table.json",
+    "https://raw.githubusercontent.com/yuanyan3060/ArknightsGameResource/main/gamedata/excel/character_table.json",
+)
 
 DEFAULT_TTL_SECONDS = 86_400
 
@@ -58,6 +66,7 @@ class GameData:
         self._owns_client = client is None
         self.pool_meta: dict[str, dict[str, Any]] = {}
         self.pool_up: dict[str, dict[str, list[str]]] = {}
+        self.char_names: dict[str, str] = {}
         self.loaded_at = 0.0
 
     async def close(self) -> None:
@@ -106,12 +115,19 @@ class GameData:
         except OSError as exc:
             logger.warning("写入缓存 %s 失败: %s", path, exc)
 
-    async def _fetch_json(self, urls: tuple[str, ...], name: str) -> Any | None:
+    async def _fetch_json(
+        self,
+        urls: tuple[str, ...],
+        name: str,
+        transform: Callable[[Any], Any] | None = None,
+    ) -> Any | None:
         """Download a table, trying each mirror in order.
 
         Args:
             urls: Candidate URLs.
             name: Cache file name for the payload.
+            transform: Applied before caching, so an oversized source table can
+                be reduced to the part that is kept.
 
         Returns:
             Parsed JSON, or ``None`` when every mirror failed.
@@ -128,6 +144,8 @@ class GameData:
             except (httpx.HTTPError, ValueError) as exc:
                 logger.warning("下载 %s 失败: %s", url, exc)
                 continue
+            if transform is not None:
+                payload = transform(payload)
             self._write_cache(name, payload)
             return payload
         return None
@@ -150,7 +168,7 @@ class GameData:
             return True
 
         if force:
-            for name in ("gacha_meta.json", "gacha_up.json"):
+            for name in ("gacha_meta.json", "gacha_up.json", "char_names.json"):
                 try:
                     self._cache_file(name).unlink(missing_ok=True)
                 except OSError as exc:
@@ -163,13 +181,49 @@ class GameData:
 
         up_payload = await self._fetch_json(UP_URLS, "gacha_up.json")
         self.pool_up = self._parse_up(up_payload) if up_payload else {}
+
+        names = await self._fetch_json(
+            NAME_URLS, "char_names.json", transform=self._parse_names
+        )
+        self.char_names = names if isinstance(names, dict) else {}
+
         self.loaded_at = time.time()
         logger.info(
-            "卡池数据已加载：%d 个卡池，%d 个池含 UP 详情",
+            "卡池数据已加载：%d 个卡池，%d 个池含 UP 详情，%d 个干员名",
             len(self.pool_meta),
             len(self.pool_up),
+            len(self.char_names),
         )
         return True
+
+    @staticmethod
+    def _parse_names(payload: Any) -> dict[str, str]:
+        """Reduce the character table to id -> display name.
+
+        Args:
+            payload: Parsed ``character_table.json``.
+
+        Returns:
+            Mapping of operator id to name.
+        """
+        if not isinstance(payload, dict):
+            return {}
+        return {
+            str(key): str(value.get("name"))
+            for key, value in payload.items()
+            if isinstance(value, dict) and value.get("name")
+        }
+
+    def char_name(self, char_id: str) -> str:
+        """Return an operator's display name.
+
+        Args:
+            char_id: Operator id.
+
+        Returns:
+            The name, or an empty string when unknown.
+        """
+        return str(self.char_names.get(str(char_id)) or "")
 
     @staticmethod
     def _parse_meta(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:

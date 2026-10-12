@@ -364,6 +364,12 @@ async def main() -> None:
             "LIMITED_9_0_3": ["char_1012_skadi2"],
             "NORM_0_1_1": ["char_003_kalts"],
         }.get(pid, []),
+        # the real GameData carries a static id -> name table; the preview stub
+        # has to provide it too, since UP names resolve through it
+        char_name=lambda cid: {
+            "char_1012_skadi2": "浊心斯卡蒂",
+            "char_003_kalts": "凯尔希",
+        }.get(cid, ""),
     )
     gacha = analyze(_gacha_records(), gamedata, {})
     gacha.update(synced_text="2026-09-16 15:02", stored_total=246, just_synced=False)

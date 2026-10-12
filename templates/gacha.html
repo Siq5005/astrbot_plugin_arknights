@@ -60,6 +60,14 @@
         font-weight: 700;
         letter-spacing: 0.8px;
       }
+      .banner-tag {
+        font-size: 10px;
+        letter-spacing: 1.1px;
+        padding: 2px 7px;
+        border: 1px solid var(--line);
+        color: var(--label);
+        flex: none;
+      }
       .banner-name::before {
         content: "";
         display: inline-block;
@@ -80,6 +88,7 @@
         font-size: 15px;
       }
       .banner-date {
+        line-height: 1.5;
         font-size: 11px;
         color: var(--muted);
         padding: 7px 15px 0;
@@ -198,20 +207,6 @@
         color: var(--muted);
         padding: 0 15px 12px;
       }
-      .pool-line {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        font-size: 12px;
-        color: var(--label);
-        padding: 3px 15px 9px;
-      }
-      .pool-line:last-child {
-        padding-bottom: 13px;
-      }
-      .pool-line b {
-        color: var(--accent);
-      }
     </style>
   </head>
   <body>
@@ -250,11 +245,12 @@
       <div class="banner">
         <div class="banner-head">
           <span class="banner-name">{{ banner.label }}</span>
+          <span class="banner-tag">{{ banner.family }}</span>
           <span class="pity-pill">已 <b>{{ banner.pity }}</b> 抽未出六星</span>
         </div>
-        {% if banner.date_range %}
-        <div class="banner-date">{{ banner.date_range }}</div>
-        {% endif %}
+        <div class="banner-date">
+          {{ banner.date_range }}{% if banner.up_names %} · UP {{ banner.up_names | join(" / ") }}{% endif %}
+        </div>
 
         <div class="banner-body">
           <div class="banner-stats">
@@ -305,20 +301,12 @@
 
         {% if not banner.up_known %}
         <div class="note">
-          该卡池族没有可用的 UP 名单，因此不做 UP / 歪判定（避免误判）
+          {{ banner.up_note or "该卡池没有可用的 UP 名单，因此不做 UP / 歪判定" }}
         </div>
         {% elif not banner.five_total %}
-        <div class="note">该卡池族暂无五星记录</div>
+        <div class="note">该卡池暂无五星记录</div>
         {% endif %}
 
-        {% for pool in banner.pools[:4] %}
-        <div class="pool-line">
-          <span>{{ pool.name }}</span>
-          <span>
-            {{ pool.count }} 抽 · <b>{{ pool.six }}</b> 六星 · {{ pool.five }} 五星
-          </span>
-        </div>
-        {% endfor %}
       </div>
       {% endfor %}
 

@@ -221,6 +221,7 @@ def test_analyze_detects_up_and_off_rate():
     gamedata = SimpleNamespace(
         pool_name=lambda pool_id: "限定寻访",
         up_six=lambda pool_id: ["char_A"],
+        char_name=lambda char_id: {"char_A": "甲", "char_B": "乙"}.get(char_id, ""),
     )
     records = [
         _record(10, 2),
@@ -358,36 +359,61 @@ def _pool_record(ts, rarity, pool_id, char_id="", pos=0):
     }
 
 
-def test_analyze_splits_banners_and_tracks_pity_per_family():
-    """Pity must be per banner family, not one running total across banners."""
+def test_analyze_gives_every_pool_its_own_section():
+    """Each banner is its own section; two pools of one type never merge.
+
+    Grouping by banner type used to fold every rotation of a pool into a single
+    block, and since rotating pools share one generic name the rows looked like
+    one pool's records mixed into another.
+    """
+
+    class Named:
+        @staticmethod
+        def pool_name(pool_id):
+            return {
+                "NORM_0_1_1": "标准寻访A",
+                "NORM_0_1_2": "标准寻访B",
+                "LIMITED_9_0_3": "限定寻访",
+            }.get(pool_id, pool_id)
+
+        @staticmethod
+        def up_six(pool_id):
+            return []
+
+        @staticmethod
+        def char_name(char_id):
+            return ""
+
     records = [
-        # standard banner: six star on the 2nd pull, then 3 more pulls
+        # first standard banner: six star on the 2nd pull, then one more pull
         _pool_record(10, 2, "NORM_0_1_1"),
         _pool_record(20, 5, "NORM_0_1_1", "char_A"),
         _pool_record(30, 2, "NORM_0_1_1"),
-        _pool_record(40, 2, "NORM_0_1_1"),
-        _pool_record(50, 2, "NORM_0_1_1"),
-        # limited banner: six star on the 1st pull of *that* banner
+        # second standard banner, same type, own counters
+        _pool_record(40, 5, "NORM_0_1_2", "char_C"),
+        _pool_record(45, 2, "NORM_0_1_2"),
+        _pool_record(50, 2, "NORM_0_1_2"),
+        # a limited banner
         _pool_record(60, 5, "LIMITED_9_0_3", "char_B"),
         _pool_record(70, 2, "LIMITED_9_0_3"),
     ]
-    ctx = analyze(records)
-    assert ctx["total"] == 7
-    assert ctx["six_total"] == 2
-    # globally the newest six star is followed by one pull
-    assert ctx["pity"] == 1
+    ctx = analyze(records, gamedata=Named())
+    assert ctx["total"] == 8
+    assert ctx["six_total"] == 3
+    assert ctx["banner_count"] == 3
 
     by_label = {banner["label"]: banner for banner in ctx["banners"]}
-    assert set(by_label) == {"标准寻访", "限定寻访"}
-    assert by_label["标准寻访"]["total"] == 5
-    # within the standard family the latest six star is the 2nd pull, and three
-    # pulls follow it
-    assert by_label["标准寻访"]["pity"] == 3
-    assert by_label["标准寻访"]["six_total"] == 1
-    assert by_label["限定寻访"]["total"] == 2
+    assert set(by_label) == {"标准寻访A", "标准寻访B", "限定寻访"}
+    # the two standard banners stayed apart
+    assert by_label["标准寻访A"]["total"] == 3
+    assert by_label["标准寻访A"]["pity"] == 1
+    assert by_label["标准寻访A"]["six_total"] == 1
+    assert by_label["标准寻访B"]["total"] == 3
+    assert by_label["标准寻访B"]["pity"] == 2
+    assert by_label["标准寻访A"]["family"] == "标准寻访"
+    assert by_label["标准寻访B"]["family"] == "标准寻访"
     assert by_label["限定寻访"]["pity"] == 1
-    assert ctx["banner_count"] == 2
-    # newest family first
+    # newest section first
     assert ctx["banners"][0]["label"] == "限定寻访"
 
 
@@ -402,6 +428,10 @@ def test_analyze_does_not_count_off_rate_without_up_data():
         @staticmethod
         def up_six(pool_id):
             return []
+
+        @staticmethod
+        def char_name(char_id):
+            return ""
 
     records = [
         _pool_record(10, 5, "SPECIAL_54_0_5", "char_A"),
@@ -426,6 +456,10 @@ def test_analyze_scores_up_for_joint_banner_with_multiple_six_stars():
         def up_six(pool_id):
             return ["char_A", "char_B", "char_C"]
 
+        @staticmethod
+        def char_name(char_id):
+            return ""
+
     records = [
         _pool_record(10, 5, "SPECIAL_54_0_5", "char_A"),
         _pool_record(20, 5, "SPECIAL_54_0_5", "char_C"),
@@ -434,5 +468,90 @@ def test_analyze_scores_up_for_joint_banner_with_multiple_six_stars():
     assert ctx["up_known"] is True
     assert ctx["up_hits"] == 2
     assert ctx["off_rate"] == 0
-    assert ctx["banners"][0]["label"] == "定向甄选"
+    # the section is titled with the pool's own name; its type is shown apart
+    assert ctx["banners"][0]["label"] == "联合作战寻访"
+    assert ctx["banners"][0]["family"] == "定向甄选"
     assert ctx["luck"] in {"欧皇", "偏欧", "平稳", "偏非", "非酋"}
+
+
+def test_record_times_accept_millisecond_timestamps():
+    """The official endpoint reports milliseconds; dates used to come out empty.
+
+    ``datetime.fromtimestamp`` on a millisecond value raises, and the old code
+    swallowed that and returned "", so every date on the card was blank.
+    """
+    from core.gacha import format_record_time, to_seconds
+
+    millis = 1782841874151
+    assert to_seconds(millis) == 1782841874
+    assert to_seconds("1782841874") == 1782841874
+    assert to_seconds(0) == 0
+    assert to_seconds(None) == 0
+    assert to_seconds("garbage") == 0
+    assert format_record_time(millis) == "2026-07-01 01:51"
+    assert format_record_time(1782841874) == "2026-07-01 01:51"
+
+
+def test_banner_date_range_is_populated_for_millisecond_records():
+    def millis(sec, pos, pool, rarity=2, cid=""):
+        rec = _pool_record(sec, pos, pool, cid)
+        rec["rarity"] = rarity
+        rec["gachaTs"] = str(sec * 1000)
+        return rec
+
+    records = [
+        millis(1782841874, 1, "NORM_0_1_1"),
+        millis(1782843000, 2, "NORM_0_1_1"),
+    ]
+    ctx = analyze(records)
+    assert ctx["banners"][0]["date_range"]
+    assert "2026-07-01" in ctx["banners"][0]["date_range"]
+
+
+def test_pools_without_up_data_explain_why():
+    """A missing UP list says why, and the reason depends on the pool type.
+
+    ``定向甄选`` lets the player pick the rate-up target, so no fixed list can
+    exist; the standard rotation simply is not covered by the data source. A
+    generic "no data" line leaves the reader unable to tell which it is.
+    """
+
+    class NoUp:
+        @staticmethod
+        def pool_name(pool_id):
+            return {"SPECIAL_54_0_5": "定向甄选"}.get(pool_id, pool_id)
+
+        @staticmethod
+        def up_six(pool_id):
+            return []
+
+        @staticmethod
+        def char_name(char_id):
+            return ""
+
+    chosen = analyze([_pool_record(10, 5, "SPECIAL_54_0_5", "char_A")], gamedata=NoUp())
+    banner = chosen["banners"][0]
+    assert banner["up_known"] is False
+    assert "自选" in banner["up_note"]
+
+    standard = analyze([_pool_record(10, 5, "NORM_0_1_1", "char_A")], gamedata=NoUp())
+    assert "数据源未收录" in standard["banners"][0]["up_note"]
+
+
+def test_pools_with_up_data_carry_no_note():
+    class Up:
+        @staticmethod
+        def pool_name(pool_id):
+            return "限定寻访"
+
+        @staticmethod
+        def up_six(pool_id):
+            return ["char_A"]
+
+        @staticmethod
+        def char_name(char_id):
+            return "甲"
+
+    ctx = analyze([_pool_record(10, 5, "LIMITED_1_0_1", "char_A")], gamedata=Up())
+    assert ctx["banners"][0]["up_known"] is True
+    assert ctx["banners"][0]["up_note"] == ""

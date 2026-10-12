@@ -116,17 +116,25 @@ async def test_ensure_downloads_and_caches(tmp_path):
 
     def handler(request):
         calls.append(str(request.url))
+        if "character_table" in str(request.url):
+            return httpx.Response(200, json={"char_103_angel": {"name": "能天使"}})
         if "prts" in str(request.url):
             return httpx.Response(200, json=UP)
         return httpx.Response(200, json=META)
 
     data = GameData(tmp_path, client=_client(handler))
     assert await data.ensure() is True
-    assert len(calls) == 2
+    # gacha metadata, the PRTS up table and the character name table
+    assert len(calls) == 3
     assert data.pool_name("NORM_0_1_1") == "适合多种场合的强力干员"
     assert data.up_six("NORM_0_1_1") == ["char_103_angel"]
     assert data.pool_name("missing") == "missing"
     assert data.up_six("missing") == []
+    assert data.char_name("char_103_angel") == "能天使"
+    assert data.char_name("missing") == ""
+    # the oversized source table is reduced before it reaches the disk
+    cached_names = tmp_path / "char_names.json"
+    assert cached_names.is_file() and cached_names.stat().st_size < 4096
 
     # Second call is served from the cache, so no further downloads happen.
     before = len(calls)
@@ -187,13 +195,15 @@ async def test_corrupt_cache_is_ignored(tmp_path):
 
     def handler(request):
         calls.append(str(request.url))
+        if "character_table" in str(request.url):
+            return httpx.Response(200, json={"char_103_angel": {"name": "能天使"}})
         if "prts" in str(request.url):
             return httpx.Response(200, json=UP)
         return httpx.Response(200, json=META)
 
     data = GameData(tmp_path, client=_client(handler))
     assert await data.ensure() is True
-    assert len(calls) == 2
+    assert len(calls) == 3
     assert json.loads((tmp_path / "gacha_meta.json").read_text())["gachaPoolClient"]
 
 
