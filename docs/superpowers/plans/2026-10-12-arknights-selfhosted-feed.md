@@ -36,7 +36,7 @@
   - 服务端单测：`/opt/arksource/venv/bin/python -m pytest server/tests -q`（本地开发用同一命令，路径换成仓库内 venv）
 - **依赖**：服务端只允许 `fastapi`、`uvicorn[standard]`、`httpx`、`pycryptodome`、`qrcode`。不得引入 ORM、数据库或任务队列——缓存用内存字典 + 一个 JSON 文件。
 - **不复制 AGPL 代码**：`astrbot_plugin_endfield`、`astrbot_plugin_mrfz_haunting_query` 是 AGPL-3.0，本仓库保持 MIT，只做独立实现。
-- **服务端不得写死环境相关的绝对路径**：全部走环境变量（见 Task A1 的 `Settings`）。
+- **服务端不得写死环境相关的绝对路径**：全部走环境变量（见 Task 1 的 `Settings`）。
 
 ---
 
@@ -77,7 +77,7 @@
 
 # Phase A：聚合服务
 
-## Task A1: 服务骨架与森空岛客户端落地
+## Task 1: 服务骨架与森空岛客户端落地
 
 **Files:**
 - Create: `server/requirements.txt`
@@ -265,19 +265,19 @@ git commit -m "feat(server): scaffold aggregator settings and vendor skland clie
 
 ---
 
-## Task A2: 「官方」栏目抓取与归一化
+## Task 2: 「官方」栏目抓取与归一化
 
 **Files:**
 - Create: `server/app/feed.py`
 - Test: `server/tests/test_feed.py`
 
 **Interfaces:**
-- Consumes: `app.skland_client.SklandClient`（`get_device_id()` / `get_authorization()` / `get_credential()` / `_signed_headers()` / `_request()`）。**注意**：`_signed_headers` 与 `_request` 是下划线开头的内部方法，Task A1 的副本必须保留它们的现有签名：`_signed_headers(url, method, body, cred, did) -> dict[str, str]` 与 `_request(method, url, headers=None, json_data=None, content=None) -> Any`。
+- Consumes: `app.skland_client.SklandClient`（`get_device_id()` / `get_authorization()` / `get_credential()` / `_signed_headers()` / `_request()`）。**注意**：`_signed_headers` 与 `_request` 是下划线开头的内部方法，Task 1 的副本必须保留它们的现有签名：`_signed_headers(url, method, body, cred, did) -> dict[str, str]` 与 `_request(method, url, headers=None, json_data=None, content=None) -> Any`。
 - Produces:
-  - `FEED_URL_TEMPLATE`、`ARTICLE_URL_TEMPLATE`、`OFFICIAL_GAME_ID = 1`、`OFFICIAL_CATE_ID = 1`、`PAGE_SIZE = 10`
+  - `ZONAI_BASE`、`FEED_PATH`、`ARTICLE_URL_TEMPLATE`、`OFFICIAL_GAME_ID = 1`、`OFFICIAL_CATE_ID = 1`、`PAGE_SIZE = 10`
   - `class FeedError(Exception)`
-  - `async def fetch_official(client: SklandClient) -> list[dict[str, Any]]` —— 返回**最新在前**的归一化条目，元素字段固定为：`id: str`、`title: str`、`kind: int`、`published_at: int`、`cover: str`、`images: list[str]`、`text: str`、`url: str`、`tags: list[str]`
-  - `def normalize(item: dict[str, Any], detail_item: dict[str, Any] | None = None) -> dict[str, Any]`
+  - `async def fetch_official(client, user_token: str, window_hours: int = 72, now: int | None = None) -> list[dict[str, Any]]` —— 返回**最新在前**的归一化条目，元素字段固定为：`id: str`、`title: str`、`kind: int`、`published_at: int`、`cover: str`、`images: list[str]`、`text: str`、`url: str`、`tags: list[str]`
+  - `def normalize(item: dict[str, Any], detail_item: dict[str, Any] | None = None, tags: list[dict[str, Any]] | None = None) -> dict[str, Any]`
   - `def document_to_text(document: dict[str, Any]) -> str`
 
 - [ ] **Step 1: 写失败的测试**
@@ -625,7 +625,7 @@ async def fetch_official(
     return records
 ```
 
-**注意**：`fetch_official` 需要 `user_token`。Task A1 的 `SklandClient` 副本没有 `user_token` 属性，也没有 `settings_user_token`。为避免改动 vendored 副本，**把签名改为显式传入**——把上面 `authorization = ...` 两行替换为：
+**注意**：`fetch_official` 需要 `user_token`。Task 1 的 `SklandClient` 副本没有 `user_token` 属性，也没有 `settings_user_token`。为避免改动 vendored 副本，**把签名改为显式传入**——把上面 `authorization = ...` 两行替换为：
 
 ```python
     authorization = await client.get_authorization(user_token)
@@ -734,7 +734,7 @@ git commit -m "feat(server): fetch and normalise the skland official column"
 
 ---
 
-## Task A3: 轮询缓存
+## Task 3: 轮询缓存
 
 **Files:**
 - Create: `server/app/cache.py`
@@ -961,7 +961,7 @@ git commit -m "feat(server): cache the official feed with staleness tracking"
 
 ---
 
-## Task A4: HTTP 接口与鉴权
+## Task 4: HTTP 接口与鉴权
 
 **Files:**
 - Create: `server/app/credentials.py`
@@ -1295,7 +1295,7 @@ git commit -m "feat(server): expose api-key gated feed endpoint"
 
 ---
 
-## Task A5: 一次性扫码登录脚本
+## Task 5: 一次性扫码登录脚本
 
 **Files:**
 - Create: `server/scripts/login.py`
@@ -1404,7 +1404,7 @@ if __name__ == "__main__":
 Run: `cd server && /Users/coe/project/AstrBot/.venv/bin/python -m py_compile scripts/login.py && echo ok`
 Expected: 输出 `ok`
 
-- [ ] **Step 3: 部署后在 HK 上实跑（Task A6 完成后执行）**
+- [ ] **Step 3: 部署后在 HK 上实跑（Task 6 完成后执行）**
 
 Run: `ssh HK '/opt/arksource/venv/bin/python /opt/arksource/scripts/login.py'`
 Expected: 终端出现二维码 → 用森空岛 APP 扫码 → 输出「登录成功，凭证已写入 …」
@@ -1418,7 +1418,7 @@ git commit -m "feat(server): add one-time skland qr login script"
 
 ---
 
-## Task A6: 部署到 HK 并线上验证
+## Task 6: 部署到 HK 并线上验证
 
 **Files:**
 - Create: `server/deploy/arksource.service`
@@ -1557,7 +1557,7 @@ ssh HK 'cd /opt/arksource && python3 -m venv venv && ./venv/bin/pip install -q -
 ssh HK 'cd /opt/arksource && printf "ARKSOURCE_API_KEY=%s\nARKSOURCE_HOST=127.0.0.1\nARKSOURCE_PORT=8788\nARKSOURCE_CREDENTIAL_FILE=/opt/arksource/credentials.json\nARKSOURCE_POLL_INTERVAL=600\nARKSOURCE_WINDOW_HOURS=72\nARKSOURCE_STALE_MINUTES=60\n" "$(openssl rand -hex 24)" > arksource.env && chmod 600 arksource.env && cat arksource.env'
 ```
 
-**把输出的 `ARKSOURCE_API_KEY` 记下来**——Task B3 要把它写进插件配置的默认值。
+**把输出的 `ARKSOURCE_API_KEY` 记下来**——Task 9 要把它写进插件配置的默认值。
 
 - [ ] **Step 5: 扫码登录**
 
@@ -1629,14 +1629,14 @@ git commit -m "feat(server): deployment units, caddy snippet and runbook"
 
 # Phase B：插件端
 
-## Task B1: 自建源客户端
+## Task 7: 自建源客户端
 
 **Files:**
 - Create: `core/feed.py`
 - Test: `tests/test_feed.py`
 
 **Interfaces:**
-- Consumes: 服务端 `GET /api/ark/v1/feed`（见 Task A4）
+- Consumes: 服务端 `GET /api/ark/v1/feed`（见 Task 4）
 - Produces:
   - `class FeedError(Exception)`
   - `class FeedClient`，构造 `FeedClient(base_url: str, api_key: str, client: httpx.AsyncClient | None = None)`
@@ -1942,7 +1942,7 @@ git commit -m "feat: add self-hosted official feed client"
 
 ---
 
-## Task B2: 源状态持久化
+## Task 8: 源状态持久化
 
 **Files:**
 - Modify: `core/store.py`
@@ -1956,14 +1956,10 @@ git commit -m "feat: add self-hosted official feed client"
 
 - [ ] **Step 1: 写失败的测试**
 
+**注意**：`tests/test_store.py` **已经存在**（含 `test_upsert_and_get_user` 等用例）。不要覆盖它——把下面两个用例**追加到文件末尾**即可；该文件已经 `import pytest`、`from core.store import Store`，并统一使用 `Store(tmp_path / "users.json")` 的写法。
+
 ```python
-# tests/test_store.py  （若已存在，把下面两个用例追加进去，并复用文件里已有的 store 夹具）
-"""Feed source state survives restarts."""
-
-import pytest
-
-from core.store import Store
-
+# 追加到 tests/test_store.py 末尾
 
 @pytest.mark.anyio
 async def test_feed_state_defaults_to_empty(tmp_path):
@@ -1992,14 +1988,23 @@ Expected: FAIL — `AttributeError: 'Store' object has no attribute 'feed_state'
 
 - [ ] **Step 3: 在 `core/store.py` 实现**
 
-先读 `core/store.py` 确认现有结构（`announce_watermark` / `set_announce_watermark` 的写法），然后照同一模式加入。顶部顶层键新增 `feed`：
+`core/store.py` 里的 `_empty()` 定义了存储的全部顶层键，先把 `feed` 加进去：
 
 ```python
-    # ``feed`` holds which announcement source is currently serving pushes. It
-    # lives in the same file as everything else so a restart cannot lose a
-    # degradation that is in progress.
-    "feed": {"active": ""},
+def _empty() -> dict[str, Any]:
+    """Return a freshly initialized store structure."""
+    return {
+        "users": {},
+        "subs": {"sanity": [], "sign_groups": [], "announce": []},
+        "announce": {"watermark": 0},
+        # ``feed`` records whether the plugin has degraded away from the
+        # self-hosted source. It lives here so a restart cannot lose a
+        # degradation that is in progress. ``""`` means "not degraded".
+        "feed": {"active": ""},
+    }
 ```
+
+然后照 `announce_watermark` / `set_announce_watermark` 的写法新增两个方法：
 
 新增方法：
 
@@ -2046,7 +2051,7 @@ git commit -m "feat: persist announcement source state"
 
 ---
 
-## Task B3: 配置项
+## Task 9: 配置项
 
 **Files:**
 - Modify: `_conf_schema.json`
@@ -2076,7 +2081,7 @@ git commit -m "feat: persist announcement source state"
   "feed_api_key": {
     "description": "自建源访问密钥",
     "type": "string",
-    "default": "<Task A6 Step 4 生成的 key>",
+    "default": "<Task 6 Step 4 生成的 key>",
     "hint": "已内置默认值，无需修改"
   },
   "feed_exclude_keywords": {
@@ -2093,7 +2098,7 @@ git commit -m "feat: persist announcement source state"
   }
 ```
 
-**必须把 `"<Task A6 Step 4 生成的 key>"` 替换成 Task A6 Step 4 实际生成的 key**，否则配置默认值不可用。
+**必须把 `"<Task 6 Step 4 生成的 key>"` 替换成 Task 6 Step 4 实际生成的 key**，否则配置默认值不可用。
 
 - [ ] **Step 2: 校验 JSON 合法**
 
@@ -2109,14 +2114,14 @@ git commit -m "feat: add self-hosted feed configuration"
 
 ---
 
-## Task B4: 源选择、失败重试与降级告警
+## Task 10: 源选择、失败重试与降级告警
 
 **Files:**
 - Modify: `main.py`（新增 `_source_records`、`_feed_retry_delays`、`_notify_feed_subscribers`，改 `_announce_poll_job` 的取数调用，改 `initialize`/`terminate` 增加 `_feed` 生命周期）
 - Modify: `tests/integration_check.py`
 
 **Interfaces:**
-- Consumes: `core.feed.FeedClient`、`FeedError`（Task B1）；`Store.feed_state` / `set_feed_active`（Task B2）；配置键（Task B3）
+- Consumes: `core.feed.FeedClient`、`FeedError`（Task 7）；`Store.feed_state` / `set_feed_active`（Task 8）；配置键（Task 9）
 - Produces:
   - `self._feed: FeedClient`（在 `initialize` 构造，`terminate` 关闭）
   - `def _feed_retry_delays(self) -> list[float]` —— 解析 `feed_retry_delays`，返回单位分钟的浮点列表
@@ -2447,31 +2452,74 @@ git commit -m "feat: prefer the self-hosted source and degrade to the website"
 
 ---
 
-## Task B5: 排除过滤接入推送
+## Task 11: 排除过滤接入推送
 
 **Files:**
 - Modify: `main.py`（`_announce_poll_job` 的 `fresh` 计算处）
 - Modify: `tests/integration_check.py`
 
 **Interfaces:**
-- Consumes: `_is_excluded`（Task B4）
+- Consumes: `_is_excluded`（Task 10）
 - Produces: 被排除的条目既不推送也不推进水位线
 
 - [ ] **Step 1: 写失败的断言**
 
-追加到 `tests/integration_check.py`：
+追加到 `tests/integration_check.py`，紧接 10 那段之后。**必须自己构造插件并显式配置关键词**——10 最后留下的那个 `plugin` 配的是 `{"feed_source": "official"}`，没设 `feed_exclude_keywords`，空关键词等于什么都不过滤。
 
 ```python
-    # ── 排除过滤：既不推送，也不推进水位线 ────────────────────────────────
-    now = int(time.time())
-    records = [
-        {"id": "1", "title": "【签到福利】森空岛10月签到福利活动开启！", "ts": now - 60,
-         "group_cn": "官方", "date_text": "x", "brief": ""},
-        {"id": "2", "title": "《明日方舟》EP - 大地之盐", "ts": now - 30,
-         "group_cn": "官方", "date_text": "x", "brief": ""},
+    # ── 排除过滤：命中关键词的条目既不推送，也不推进水位线 ────────────────
+    FILTER_TS = int(time.time())
+
+    def filter_fixture(ident, title, ts):
+        return {
+            "id": ident,
+            "title": title,
+            "author": "明日方舟",
+            "brief": "",
+            "group": "OFFICIAL",
+            "group_cn": "官方",
+            "url": "",
+            "ts": ts,
+            "date_text": "2026-10-12 11:00",
+        }
+
+    filter_records = [
+        filter_fixture("1", "【签到福利】森空岛10月签到福利活动开启！", FILTER_TS - 60),
+        filter_fixture("2", "《明日方舟》EP - 大地之盐", FILTER_TS - 30),
+        filter_fixture("3", "【有奖活动】猜猜我是谁#2全新谜题开启！", FILTER_TS - 20),
     ]
-    fresh = plugin._filter_pushable(records, watermark=now - 120, now=now, window=86400)
-    check("排除项被过滤", [item["id"] for item in fresh] == ["2"], fresh)
+
+    filtering = plugin_module.ArknightsPlugin(
+        context=SimpleNamespace(send_message=None),
+        config={"feed_exclude_keywords": "签到福利,有奖活动,模组"},
+    )
+    kept = filtering._filter_pushable(
+        filter_records, watermark=FILTER_TS - 120, now=FILTER_TS, window=86400
+    )
+    check("排除关键词被过滤", [item["id"] for item in kept] == ["2"], kept)
+    check(
+        "未命中关键词的条目不误伤",
+        filtering._is_excluded("《明日方舟》EP - 大地之盐") is False,
+        None,
+    )
+
+    # 关键词留空时必须全部放行，否则用户没法关掉过滤
+    permissive = plugin_module.ArknightsPlugin(
+        context=SimpleNamespace(send_message=None), config={"feed_exclude_keywords": ""}
+    )
+    all_kept = permissive._filter_pushable(
+        filter_records, watermark=FILTER_TS - 120, now=FILTER_TS, window=86400
+    )
+    check("关键词留空时不过滤", len(all_kept) == 3, all_kept)
+
+    # 时间窗口依旧生效：把「现在」推到 48 小时后，三条都过期
+    expired = filtering._filter_pushable(
+        filter_records,
+        watermark=FILTER_TS - 120,
+        now=FILTER_TS + 48 * 3600,
+        window=86400,
+    )
+    check("超出时间窗口的条目不会被推送", expired == [], expired)
 ```
 
 - [ ] **Step 2: 运行确认失败**
@@ -2535,7 +2583,7 @@ git commit -m "feat: honour the exclusion keywords when pushing"
 
 ---
 
-## Task B6: 版本、文档与发布
+## Task 12: 版本、文档与发布
 
 **Files:**
 - Modify: `metadata.yaml`、`main.py`（`PLUGIN_VERSION`）、`README.md`
@@ -2614,19 +2662,19 @@ Expected: `active`；日志出现自建源取数成功（首次轮询会初始�
 
 | 需求 | 对应任务 |
 |:--|:--|
-| 自建源、使用者零凭据 | A1–A6（服务端持有凭证）、B1/B3（插件只配 URL + Key） |
-| Key 内置在插件中 | B3（`feed_api_key` 默认值即服务端 key） |
-| 默认自建源、降级官网源 | B3（`feed_source` 默认 `selfhosted`）、B4（重试与降级状态机） |
-| 只保留官方栏目 | A2（`cateId=1`） |
-| 排除签到福利/森空岛活动/模组工具 | B3（关键词默认值）、B5（过滤接线） |
-| 视频轻量推送、无原文链接 | B1（`body_html` = 正文 + 封面图，不含链接）、B4/B5 未在文案中附加 URL |
-| 轮询失败 → 重试 → 全失败才降级，并通知 | B4（`_feed_retry_delays` + `_source_records` + `_notify_feed_subscribers`） |
-| 用户可配置 | B3（`feed_source` / `feed_retry_delays` / `feed_exclude_keywords` / 源地址与 Key） |
-| 服务部署在 HK，子域 `ark.youyou.ink` | A6（子域站点块 + A 记录前置检查） |
+| 自建源、使用者零凭据 | 1–6（服务端持有凭证）、7/9（插件只配 URL + Key） |
+| Key 内置在插件中 | 9（`feed_api_key` 默认值即服务端 key） |
+| 默认自建源、降级官网源 | 9（`feed_source` 默认 `selfhosted`）、10（重试与降级状态机） |
+| 只保留官方栏目 | 2（`cateId=1`） |
+| 排除签到福利/森空岛活动/模组工具 | 9（关键词默认值）、11（过滤接线） |
+| 视频轻量推送、无原文链接 | 7（`body_html` = 正文 + 封面图，不含链接）、10/11 未在文案中附加 URL |
+| 轮询失败 → 重试 → 全失败才降级，并通知 | 10（`_feed_retry_delays` + `_source_records` + `_notify_feed_subscribers`） |
+| 用户可配置 | 9（`feed_source` / `feed_retry_delays` / `feed_exclude_keywords` / 源地址与 Key） |
+| 服务部署在 HK，子域 `ark.youyou.ink` | 6（子域站点块 + A 记录前置检查） |
 
-**2. 占位符扫描**：无 TBD/TODO。唯一的运行期填值点是 Task A6 Step 4 生成的 API key，它在 Task B3 Step 1 被显式要求替换，并在 Task B3 Step 2 用断言校验（须以十六进制字符开头）。
+**2. 占位符扫描**：无 TBD/TODO。唯一的运行期填值点是 Task 6 Step 4 生成的 API key，它在 Task 9 Step 1 被显式要求替换，并在 Task 9 Step 2 用断言校验（须以十六进制字符开头）。
 
-**3. 类型一致性**：`FeedCache.snapshot()` 的键 `items`/`last_success_at`/`last_error`/`stale` 在 A3 定义、A4 消费、B1 读取一致；`FeedClient.fetch()` 产出的记录键与 `core.announce.AnnounceClient.fetch()` 保持一致，`_announce_poll_job` 因此无需按源分支；`Store.feed_state()` 返回的 `active`（`""` = 正常、`"official"` = 已降级）在 B2 定义、B4 消费一致；`_is_excluded` 在 B4 定义、B5 复用；`FeedError` 在 B1 定义、B4 捕获。
+**3. 类型一致性**：`FeedCache.snapshot()` 的键 `items`/`last_success_at`/`last_error`/`stale` 在 3 定义、4 消费、7 读取一致；`FeedClient.fetch()` 产出的记录键与 `core.announce.AnnounceClient.fetch()` 保持一致，`_announce_poll_job` 因此无需按源分支；`Store.feed_state()` 返回的 `active`（`""` = 正常、`"official"` = 已降级）在 8 定义、10 消费一致；`_is_excluded` 在 10 定义、11 复用；`FeedError` 在 7 定义、10 捕获。
 
 **4. 待确认项（实现前需你拍板）**
 
