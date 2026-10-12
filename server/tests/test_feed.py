@@ -1,8 +1,6 @@
 """Feed normalisation is pure, so it is tested without touching the network."""
 
-import httpx
 import pytest
-
 from app.feed import FeedError, document_to_text, fetch_official, normalize
 
 
@@ -12,11 +10,15 @@ def test_document_to_text_joins_text_blocks_in_order():
         "blockMap": {
             "b": {
                 "kind": "text",
-                "text": {"inlineElements": [{"kind": "text", "text": {"text": "第二行"}}]},
+                "text": {
+                    "inlineElements": [{"kind": "text", "text": {"text": "第二行"}}]
+                },
             },
             "a": {
                 "kind": "text",
-                "text": {"inlineElements": [{"kind": "text", "text": {"text": "第一行"}}]},
+                "text": {
+                    "inlineElements": [{"kind": "text", "text": {"text": "第一行"}}]
+                },
             },
             "c": {"kind": "image", "image": {"id": "x"}},
         },
@@ -38,7 +40,10 @@ def test_normalize_maps_list_item_to_stable_shape():
         "publishedAtTs": "1791709243",
         "thumbnail": "https://bbs.hycdn.cn/cover.webp",
         "imageList": [
-            {"url": "https://bbs.hycdn.cn/a.webp", "infos": [{"url": "https://bbs.hycdn.cn/a-inner.webp"}]}
+            {
+                "url": "https://bbs.hycdn.cn/a.webp",
+                "infos": [{"url": "https://bbs.hycdn.cn/a-inner.webp"}],
+            }
         ],
         "tagIds": [474],
     }
@@ -57,7 +62,13 @@ def test_normalize_maps_list_item_to_stable_shape():
 
 
 def test_normalize_uses_thumbnail_when_image_list_is_empty():
-    item = {"id": "1", "title": "t", "viewKind": 3, "publishedAtTs": 10, "thumbnail": "https://x/y.webp"}
+    item = {
+        "id": "1",
+        "title": "t",
+        "viewKind": 3,
+        "publishedAtTs": 10,
+        "thumbnail": "https://x/y.webp",
+    }
 
     record = normalize(item)
 
@@ -66,8 +77,13 @@ def test_normalize_uses_thumbnail_when_image_list_is_empty():
 
 
 def test_normalize_falls_back_to_first_image_for_cover():
-    item = {"id": "1", "title": "t", "viewKind": 3, "publishedAtTs": 10,
-            "imageList": [{"url": "https://bbs.hycdn.cn/a.webp"}]}
+    item = {
+        "id": "1",
+        "title": "t",
+        "viewKind": 3,
+        "publishedAtTs": 10,
+        "imageList": [{"url": "https://bbs.hycdn.cn/a.webp"}],
+    }
 
     record = normalize(item)
 
@@ -80,7 +96,12 @@ def test_normalize_reads_text_from_document():
         "document": {
             "blockIds": ["a"],
             "blockMap": {
-                "a": {"kind": "text", "text": {"inlineElements": [{"kind": "text", "text": {"text": "正文"}}]}}
+                "a": {
+                    "kind": "text",
+                    "text": {
+                        "inlineElements": [{"kind": "text", "text": {"text": "正文"}}]
+                    },
+                }
             },
         }
     }
@@ -91,10 +112,9 @@ def test_normalize_reads_text_from_document():
 class _FakeSkland:
     """Minimal stand-in for SklandClient, recording requested URLs."""
 
-    def __init__(self, pages, user_token="tok"):
+    def __init__(self, pages):
         self._pages = pages
         self.urls = []
-        self.user_token = user_token
 
     async def get_device_id(self):
         return "did"
