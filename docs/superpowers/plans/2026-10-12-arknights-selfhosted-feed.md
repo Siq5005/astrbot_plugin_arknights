@@ -1292,12 +1292,12 @@ if __name__ == "__main__":
 - [ ] **Step 4: 运行测试确认通过**
 
 Run: `cd server && /Users/coe/project/AstrBot/.venv/bin/python -m pytest tests/test_api.py -q`
-Expected: PASS（4 passed）
+Expected: PASS（5 passed）
 
 - [ ] **Step 5: 运行全部服务端测试**
 
 Run: `cd server && /Users/coe/project/AstrBot/.venv/bin/python -m pytest tests -q`
-Expected: PASS（16 passed）
+Expected: PASS（20 passed = 本任务的 5 条 + 既有 15 条）
 
 - [ ] **Step 6: 提交**
 
