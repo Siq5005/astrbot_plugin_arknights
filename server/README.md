@@ -10,6 +10,9 @@
 
 ## 部署
 
+前置条件：宿主机上要有 root 权限、已安装 Caddy，以及 `python3-venv`
+（Debian/Ubuntu 上 `python3 -m venv` 缺它就会失败：`apt install python3-venv`）。
+
 ```bash
 # 1. 代码
 mkdir -p /opt/arksource && cd /opt/arksource
@@ -19,9 +22,11 @@ mkdir -p /opt/arksource && cd /opt/arksource
 python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 
-# 3. 配置
-cat > arksource.env <<'EOF'
-ARKSOURCE_API_KEY=<用 openssl rand -hex 24 生成>
+# 3. 配置：生成 Key 并记下来，插件配置里要用同一个值
+KEY=$(openssl rand -hex 24)
+echo "API Key（请抄下来）: $KEY"
+cat > arksource.env <<EOF
+ARKSOURCE_API_KEY=$KEY
 ARKSOURCE_HOST=127.0.0.1
 ARKSOURCE_PORT=8788
 ARKSOURCE_CREDENTIAL_FILE=/opt/arksource/credentials.json
@@ -38,18 +43,23 @@ chmod 600 arksource.env
 cp deploy/arksource.service /etc/systemd/system/
 systemctl daemon-reload && systemctl enable --now arksource
 
-# 6. 反代：给 ark.youyou.ink 配 A 记录指向 162.211.183.29，再把
-#    deploy/caddy-snippet.txt 的站点块追加到 /etc/caddy/Caddyfile 末尾
+# 6. 反代：给 ark.youyou.ink 配 A 记录指向 162.211.183.29，再追加站点块。
+#    改之前一定先备份——这台 Caddy 还反代着别的站点，写错会一起挂掉。
+cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-$(date +%Y%m%d-%H%M%S)
+cat deploy/caddy-snippet.txt >> /etc/caddy/Caddyfile
 caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
 ```
 
 ## 验证
 
 ```bash
+set -a; . ./arksource.env; set +a   # 让下面的 $ARKSOURCE_API_KEY 有值
 curl -s localhost:8788/api/ark/v1/health
 curl -s -H "X-API-Key: $ARKSOURCE_API_KEY" localhost:8788/api/ark/v1/feed | head -c 400
 curl -s -H "X-API-Key: $ARKSOURCE_API_KEY" https://ark.youyou.ink/api/ark/v1/feed | head -c 400
 ```
+
+第 1 条不带 Key，故意不带；后两条没带对 Key 会返回 401。
 
 ## 接口
 
@@ -63,7 +73,8 @@ curl -s -H "X-API-Key: $ARKSOURCE_API_KEY" https://ark.youyou.ink/api/ark/v1/fee
 
 ## 维护
 
-- 凭证失效（接口持续报 `用户未登录`）：重跑 `scripts/login.py`。
+- 凭证失效：看 `curl -s localhost:8788/api/ark/v1/health` 里的 `last_error`
+  是否出现 `用户未登录`；是的话重跑 `scripts/login.py`。
 - `core/skland.py` 或 `core/hypergryph.py` 变更后，用 `cp` 重新覆盖
   `app/skland_client.py` / `app/hypergryph_client.py`，并重启服务。
 - `stale` 长时间为 `true`：看 `journalctl -u arksource -n 50`。
