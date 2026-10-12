@@ -209,7 +209,9 @@ class Settings:
         return cls(
             api_key=os.environ.get("ARKSOURCE_API_KEY", "").strip(),
             credential_file=Path(
-                os.environ.get("ARKSOURCE_CREDENTIAL_FILE", "/opt/arksource/credentials.json")
+                os.environ.get(
+                    "ARKSOURCE_CREDENTIAL_FILE", "/opt/arksource/credentials.json"
+                )
             ),
             state_file=Path(
                 os.environ.get("ARKSOURCE_STATE_FILE", "/opt/arksource/state.json")
@@ -295,11 +297,15 @@ def test_document_to_text_joins_text_blocks_in_order():
         "blockMap": {
             "b": {
                 "kind": "text",
-                "text": {"inlineElements": [{"kind": "text", "text": {"text": "第二行"}}]},
+                "text": {
+                    "inlineElements": [{"kind": "text", "text": {"text": "第二行"}}]
+                },
             },
             "a": {
                 "kind": "text",
-                "text": {"inlineElements": [{"kind": "text", "text": {"text": "第一行"}}]},
+                "text": {
+                    "inlineElements": [{"kind": "text", "text": {"text": "第一行"}}]
+                },
             },
             "c": {"kind": "image", "image": {"id": "x"}},
         },
@@ -321,7 +327,10 @@ def test_normalize_maps_list_item_to_stable_shape():
         "publishedAtTs": "1791709243",
         "thumbnail": "https://bbs.hycdn.cn/cover.webp",
         "imageList": [
-            {"url": "https://bbs.hycdn.cn/a.webp", "infos": [{"url": "https://bbs.hycdn.cn/a-inner.webp"}]}
+            {
+                "url": "https://bbs.hycdn.cn/a.webp",
+                "infos": [{"url": "https://bbs.hycdn.cn/a-inner.webp"}],
+            }
         ],
         "tagIds": [474],
     }
@@ -340,7 +349,13 @@ def test_normalize_maps_list_item_to_stable_shape():
 
 
 def test_normalize_uses_thumbnail_when_image_list_is_empty():
-    item = {"id": "1", "title": "t", "viewKind": 3, "publishedAtTs": 10, "thumbnail": "https://x/y.webp"}
+    item = {
+        "id": "1",
+        "title": "t",
+        "viewKind": 3,
+        "publishedAtTs": 10,
+        "thumbnail": "https://x/y.webp",
+    }
 
     record = normalize(item)
 
@@ -349,8 +364,13 @@ def test_normalize_uses_thumbnail_when_image_list_is_empty():
 
 
 def test_normalize_falls_back_to_first_image_for_cover():
-    item = {"id": "1", "title": "t", "viewKind": 3, "publishedAtTs": 10,
-            "imageList": [{"url": "https://bbs.hycdn.cn/a.webp"}]}
+    item = {
+        "id": "1",
+        "title": "t",
+        "viewKind": 3,
+        "publishedAtTs": 10,
+        "imageList": [{"url": "https://bbs.hycdn.cn/a.webp"}],
+    }
 
     record = normalize(item)
 
@@ -363,7 +383,12 @@ def test_normalize_reads_text_from_document():
         "document": {
             "blockIds": ["a"],
             "blockMap": {
-                "a": {"kind": "text", "text": {"inlineElements": [{"kind": "text", "text": {"text": "正文"}}]}}
+                "a": {
+                    "kind": "text",
+                    "text": {
+                        "inlineElements": [{"kind": "text", "text": {"text": "正文"}}]
+                    },
+                }
             },
         }
     }
@@ -401,9 +426,7 @@ ZONAI_BASE = "https://zonai.skland.com"
 OFFICIAL_GAME_ID = 1
 OFFICIAL_CATE_ID = 1
 PAGE_SIZE = 10
-FEED_PATH = (
-    "/web/v2/home/index?gameId={game}&cateId={cate}&pageSize={size}&sortType=2"
-)
+FEED_PATH = "/web/v2/home/index?gameId={game}&cateId={cate}&pageSize={size}&sortType=2"
 ARTICLE_URL_TEMPLATE = "https://www.skland.com/article?id={id}"
 
 # Politeness delay between pages; the endpoint validates parameters strictly and
@@ -526,7 +549,9 @@ def normalize(
     ]
 
     try:
-        published_at = int(source.get("publishedAtTs") or item.get("publishedAtTs") or 0)
+        published_at = int(
+            source.get("publishedAtTs") or item.get("publishedAtTs") or 0
+        )
     except (TypeError, ValueError):
         published_at = 0
 
@@ -1723,7 +1748,9 @@ async def test_fetch_raises_on_http_error():
 @pytest.mark.anyio
 async def test_fetch_raises_on_401():
     def handler(request):
-        return httpx.Response(401, json={"code": 401, "message": "缺少或无效的 X-API-Key"})
+        return httpx.Response(
+            401, json={"code": 401, "message": "缺少或无效的 X-API-Key"}
+        )
 
     client = _client(handler)
     with pytest.raises(FeedError, match="X-API-Key"):
@@ -1959,6 +1986,7 @@ git commit -m "feat: add self-hosted official feed client"
 ```python
 # 追加到 tests/test_store.py 末尾
 
+
 @pytest.mark.anyio
 async def test_feed_state_defaults_to_empty(tmp_path):
     store = Store(tmp_path / "users.json")
@@ -2007,30 +2035,31 @@ def _empty() -> dict[str, Any]:
 新增方法：
 
 ```python
-    async def feed_state(self) -> dict[str, Any]:
-        """Read the announcement source state.
+async def feed_state(self) -> dict[str, Any]:
+    """Read the announcement source state.
 
-        Returns:
-            Mapping with ``active``: ``"selfhosted"``, ``"official"``, or ``""``
-            when the plugin has never degraded.
-        """
+    Returns:
+        Mapping with ``active``: ``"selfhosted"``, ``"official"``, or ``""``
+        when the plugin has never degraded.
+    """
+    data = self._read()
+    state = data.get("feed")
+    if not isinstance(state, dict):
+        return {"active": ""}
+    return {"active": str(state.get("active") or "")}
+
+
+async def set_feed_active(self, active: str) -> None:
+    """Record which source is currently serving pushes.
+
+    Args:
+        active: ``"selfhosted"`` or ``"official"``.
+    """
+    async with self._lock:
         data = self._read()
-        state = data.get("feed")
-        if not isinstance(state, dict):
-            return {"active": ""}
-        return {"active": str(state.get("active") or "")}
-
-    async def set_feed_active(self, active: str) -> None:
-        """Record which source is currently serving pushes.
-
-        Args:
-            active: ``"selfhosted"`` or ``"official"``.
-        """
-        async with self._lock:
-            data = self._read()
-            state = data.setdefault("feed", {"active": ""})
-            state["active"] = str(active)
-            self._write(data)
+        state = data.setdefault("feed", {"active": ""})
+        state["active"] = str(active)
+        self._write(data)
 ```
 
 **注意**：`core/store.py` 的私有读写方法是 `_read()` / `_write(data)`，且所有写操作都在 `async with self._lock:` 内——照抄上面写法即可。
@@ -2131,143 +2160,153 @@ git commit -m "feat: add self-hosted feed configuration"
 在 `tests/integration_check.py` 的 `main()` 内、公告订阅那组断言之后追加。**沿用该文件既有的构造方式**：`plugin_module.ArknightsPlugin(context=..., config=...)`、`plugin.store = Store(Path("/tmp/ak-integration/users.json"))`、以及已有的 `sent` / `capture` 记录发出的消息段。
 
 ```python
-    # ── 自建源：正常、重试、降级、恢复 ────────────────────────────────────
-    SELF_TS = int(time.time()) - 60
+# ── 自建源：正常、重试、降级、恢复 ────────────────────────────────────
+SELF_TS = int(time.time()) - 60
 
-    def selfhosted(ident, ts, title, kind=1):
-        return {
-            "id": ident,
-            "title": title,
-            "author": "明日方舟",
-            "brief": "",
-            "group": "OFFICIAL",
-            "group_cn": "官方",
-            "url": "",
-            "ts": ts,
-            "date_text": "2026-10-12 11:00",
-            "text": "",
-            "images": [],
-            "image_total": 0,
-            "body_html": "",
-            "kind": kind,
-            "cover": "",
-            "stale": False,
-        }
 
-    SELF_RECORDS = [selfhosted("6377378", SELF_TS, "《明日方舟》「书行山海」特别公益PV")]
-    SITE_RECORDS = [announcement("9999", SELF_TS, "[活动预告] 新活动即将开启")]
+def selfhosted(ident, ts, title, kind=1):
+    return {
+        "id": ident,
+        "title": title,
+        "author": "明日方舟",
+        "brief": "",
+        "group": "OFFICIAL",
+        "group_cn": "官方",
+        "url": "",
+        "ts": ts,
+        "date_text": "2026-10-12 11:00",
+        "text": "",
+        "images": [],
+        "image_total": 0,
+        "body_html": "",
+        "kind": kind,
+        "cover": "",
+        "stale": False,
+    }
 
-    class FakeFeed:
-        """FeedClient stand-in that fails its first ``fail_times`` calls."""
 
-        def __init__(self, records, fail_times=0, stale=False):
-            self.records = [{**record, "stale": stale} for record in records]
-            self.fail_times = fail_times
-            self.calls = 0
+SELF_RECORDS = [selfhosted("6377378", SELF_TS, "《明日方舟》「书行山海」特别公益PV")]
+SITE_RECORDS = [announcement("9999", SELF_TS, "[活动预告] 新活动即将开启")]
 
-        async def fetch(self):
-            self.calls += 1
-            if self.calls <= self.fail_times:
-                raise FeedError("连接超时")
-            return list(self.records)
 
-        async def close(self):
-            return None
+class FakeFeed:
+    """FeedClient stand-in that fails its first ``fail_times`` calls."""
 
-    def make_source_plugin(feed, config=None, announce_records=None):
-        """Build a plugin wired to the fake feed and an optional fake website."""
-        built = plugin_module.ArknightsPlugin(
-            context=SimpleNamespace(send_message=capture), config=config or {}
-        )
-        built.store = Store(Path("/tmp/ak-integration/users.json"))
-        built.store.path.unlink(missing_ok=True)
-        built._feed = feed
-        if announce_records is not None:
+    def __init__(self, records, fail_times=0, stale=False):
+        self.records = [{**record, "stale": stale} for record in records]
+        self.fail_times = fail_times
+        self.calls = 0
 
-            async def fake_site():
-                return list(announce_records)
+    async def fetch(self):
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            raise FeedError("连接超时")
+        return list(self.records)
 
-            built._announce.fetch = fake_site
-        return built
+    async def close(self):
+        return None
 
-    def alert_text():
-        return " ".join(str(getattr(seg, "text", "")) for grp in sent for seg in grp)
 
-    # 1) 自建源正常：用它，不降级
-    sent.clear()
-    feeder = FakeFeed(SELF_RECORDS)
-    plugin = make_source_plugin(
-        feeder, {"feed_source": "selfhosted", "feed_retry_delays": "0"}
+def make_source_plugin(feed, config=None, announce_records=None):
+    """Build a plugin wired to the fake feed and an optional fake website."""
+    built = plugin_module.ArknightsPlugin(
+        context=SimpleNamespace(send_message=capture), config=config or {}
     )
-    records = await plugin._source_records()
-    check("自建源正常时使用自建源", [r["id"] for r in records] == ["6377378"], records)
-    check(
-        "自建源正常时不降级",
-        (await plugin.store.feed_state())["active"] == "",
-        await plugin.store.feed_state(),
-    )
+    built.store = Store(Path("/tmp/ak-integration/users.json"))
+    built.store.path.unlink(missing_ok=True)
+    built._feed = feed
+    if announce_records is not None:
 
-    # 2) 首次失败、重试成功：不降级、不告警
-    sent.clear()
-    feeder = FakeFeed(SELF_RECORDS, fail_times=1)
-    plugin = make_source_plugin(
-        feeder, {"feed_source": "selfhosted", "feed_retry_delays": "0"}
-    )
-    records = await plugin._source_records()
-    check("重试成功后仍用自建源", [r["id"] for r in records] == ["6377378"], records)
-    check(
-        "重试成功不降级",
-        (await plugin.store.feed_state())["active"] == "",
-        await plugin.store.feed_state(),
-    )
-    check("确实发生了一次重试", feeder.calls == 2, feeder.calls)
-    check("重试成功不发告警", sent == [], f"{sent}")
+        async def fake_site():
+            return list(announce_records)
 
-    # 3) 重试全部失败：降级 + 告警 + 回落到官网源
-    sent.clear()
-    feeder = FakeFeed(SELF_RECORDS, fail_times=99)
-    plugin = make_source_plugin(
-        feeder,
-        {"feed_source": "selfhosted", "feed_retry_delays": "0,0"},
-        announce_records=SITE_RECORDS,
-    )
-    await plugin.store.set_announce_sub("2260442041", "coe:GroupMessage:454206542", True)
-    records = await plugin._source_records()
-    check(
-        "重试全部失败后降级到官网源",
-        (await plugin.store.feed_state())["active"] == "official",
-        await plugin.store.feed_state(),
-    )
-    check("降级后返回官网源记录", [r["id"] for r in records] == ["9999"], records)
-    check("尝试次数 = 首发 1 次 + 重试 2 次", feeder.calls == 3, feeder.calls)
-    check("降级向订阅者发出了告警", "降级" in alert_text(), alert_text()[:200])
+        built._announce.fetch = fake_site
+    return built
 
-    # 4) 已降级时自建源恢复：切回并通知
-    sent.clear()
-    feeder = FakeFeed(SELF_RECORDS)
-    plugin = make_source_plugin(
-        feeder, {"feed_source": "selfhosted", "feed_retry_delays": "0"}
-    )
-    await plugin.store.set_feed_active("official")
-    await plugin.store.set_announce_sub("2260442041", "coe:GroupMessage:454206542", True)
-    records = await plugin._source_records()
-    check(
-        "恢复后切回自建源",
-        (await plugin.store.feed_state())["active"] == "",
-        await plugin.store.feed_state(),
-    )
-    check("恢复后返回自建源记录", [r["id"] for r in records] == ["6377378"], records)
-    check("恢复发出了通知", "恢复" in alert_text(), alert_text()[:200])
 
-    # 5) 配置为 official 时完全不碰自建源
-    sent.clear()
-    feeder = FakeFeed(SELF_RECORDS)
-    plugin = make_source_plugin(
-        feeder, {"feed_source": "official"}, announce_records=SITE_RECORDS
-    )
-    records = await plugin._source_records()
-    check("feed_source=official 时直接用官网源", [r["id"] for r in records] == ["9999"], records)
-    check("feed_source=official 时不请求自建源", feeder.calls == 0, feeder.calls)
+def alert_text():
+    return " ".join(str(getattr(seg, "text", "")) for grp in sent for seg in grp)
+
+
+# 1) 自建源正常：用它，不降级
+sent.clear()
+feeder = FakeFeed(SELF_RECORDS)
+plugin = make_source_plugin(
+    feeder, {"feed_source": "selfhosted", "feed_retry_delays": "0"}
+)
+records = await plugin._source_records()
+check("自建源正常时使用自建源", [r["id"] for r in records] == ["6377378"], records)
+check(
+    "自建源正常时不降级",
+    (await plugin.store.feed_state())["active"] == "",
+    await plugin.store.feed_state(),
+)
+
+# 2) 首次失败、重试成功：不降级、不告警
+sent.clear()
+feeder = FakeFeed(SELF_RECORDS, fail_times=1)
+plugin = make_source_plugin(
+    feeder, {"feed_source": "selfhosted", "feed_retry_delays": "0"}
+)
+records = await plugin._source_records()
+check("重试成功后仍用自建源", [r["id"] for r in records] == ["6377378"], records)
+check(
+    "重试成功不降级",
+    (await plugin.store.feed_state())["active"] == "",
+    await plugin.store.feed_state(),
+)
+check("确实发生了一次重试", feeder.calls == 2, feeder.calls)
+check("重试成功不发告警", sent == [], f"{sent}")
+
+# 3) 重试全部失败：降级 + 告警 + 回落到官网源
+sent.clear()
+feeder = FakeFeed(SELF_RECORDS, fail_times=99)
+plugin = make_source_plugin(
+    feeder,
+    {"feed_source": "selfhosted", "feed_retry_delays": "0,0"},
+    announce_records=SITE_RECORDS,
+)
+await plugin.store.set_announce_sub("2260442041", "coe:GroupMessage:454206542", True)
+records = await plugin._source_records()
+check(
+    "重试全部失败后降级到官网源",
+    (await plugin.store.feed_state())["active"] == "official",
+    await plugin.store.feed_state(),
+)
+check("降级后返回官网源记录", [r["id"] for r in records] == ["9999"], records)
+check("尝试次数 = 首发 1 次 + 重试 2 次", feeder.calls == 3, feeder.calls)
+check("降级向订阅者发出了告警", "降级" in alert_text(), alert_text()[:200])
+
+# 4) 已降级时自建源恢复：切回并通知
+sent.clear()
+feeder = FakeFeed(SELF_RECORDS)
+plugin = make_source_plugin(
+    feeder, {"feed_source": "selfhosted", "feed_retry_delays": "0"}
+)
+await plugin.store.set_feed_active("official")
+await plugin.store.set_announce_sub("2260442041", "coe:GroupMessage:454206542", True)
+records = await plugin._source_records()
+check(
+    "恢复后切回自建源",
+    (await plugin.store.feed_state())["active"] == "",
+    await plugin.store.feed_state(),
+)
+check("恢复后返回自建源记录", [r["id"] for r in records] == ["6377378"], records)
+check("恢复发出了通知", "恢复" in alert_text(), alert_text()[:200])
+
+# 5) 配置为 official 时完全不碰自建源
+sent.clear()
+feeder = FakeFeed(SELF_RECORDS)
+plugin = make_source_plugin(
+    feeder, {"feed_source": "official"}, announce_records=SITE_RECORDS
+)
+records = await plugin._source_records()
+check(
+    "feed_source=official 时直接用官网源",
+    [r["id"] for r in records] == ["9999"],
+    records,
+)
+check("feed_source=official 时不请求自建源", feeder.calls == 0, feeder.calls)
 ```
 
 **实现前必读**：`announcement()`、`capture`、`sent` 都定义在公告推送那组断言里；把本段放在同一个 `main()` 内、`announcement` 定义之后即可共用。`FeedError` 需要在该文件里导入——文件顶部已用 `importlib` 加载插件模块，按既有写法补一行 `from core.feed import FeedError`（该文件把仓库根加进了 `sys.path`）。
@@ -2305,114 +2344,118 @@ from .core.feed import DEFAULT_BASE_URL, FeedClient, FeedError
 新增方法（放在 `_announce_records` 之后）：
 
 ```python
-    # ── 数据源选择、失败重试与降级 ────────────────────────────────────────
+# ── 数据源选择、失败重试与降级 ────────────────────────────────────────
 
-    def _is_excluded(self, title: str) -> bool:
-        """Report whether a title matches the configured exclusion keywords.
 
-        Args:
-            title: Announcement title.
+def _is_excluded(self, title: str) -> bool:
+    """Report whether a title matches the configured exclusion keywords.
 
-        Returns:
-            ``True`` when the title contains any configured keyword.
-        """
-        raw = str(self.config.get("feed_exclude_keywords") or "")
-        keywords = [part.strip() for part in raw.split(",") if part.strip()]
-        if not keywords:
-            return False
-        return any(keyword in (title or "") for keyword in keywords)
+    Args:
+        title: Announcement title.
 
-    def _feed_retry_delays(self) -> list[float]:
-        """Parse the retry schedule used after a self-hosted source failure.
+    Returns:
+        ``True`` when the title contains any configured keyword.
+    """
+    raw = str(self.config.get("feed_exclude_keywords") or "")
+    keywords = [part.strip() for part in raw.split(",") if part.strip()]
+    if not keywords:
+        return False
+    return any(keyword in (title or "") for keyword in keywords)
 
-        Returns:
-            Delays in minutes, in order; empty when retries are disabled.
-        """
-        raw = str(self.config.get("feed_retry_delays") or "")
-        delays: list[float] = []
-        for part in raw.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            try:
-                delays.append(max(0.0, float(part)))
-            except ValueError:
-                continue
-        return delays
 
-    async def _source_records(self) -> list[dict[str, Any]]:
-        """Fetch records from the active source.
+def _feed_retry_delays(self) -> list[float]:
+    """Parse the retry schedule used after a self-hosted source failure.
 
-        The self-hosted source is preferred. A failed poll is retried on the
-        configured schedule, and only when every retry fails does the plugin
-        degrade to the website source and tell the subscribers. While degraded
-        it re-probes the self-hosted source on each poll and switches back as
-        soon as that source recovers.
+    Returns:
+        Delays in minutes, in order; empty when retries are disabled.
+    """
+    raw = str(self.config.get("feed_retry_delays") or "")
+    delays: list[float] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            delays.append(max(0.0, float(part)))
+        except ValueError:
+            continue
+    return delays
 
-        Returns:
-            Records to push, newest first.
 
-        Raises:
-            AnnounceError: When the website source itself cannot be read.
-        """
-        configured = str(self.config.get("feed_source") or "selfhosted")
-        state = await self.store.feed_state()
+async def _source_records(self) -> list[dict[str, Any]]:
+    """Fetch records from the active source.
 
-        if configured == "official":
-            return await self._announce_records()
+    The self-hosted source is preferred. A failed poll is retried on the
+    configured schedule, and only when every retry fails does the plugin
+    degrade to the website source and tell the subscribers. While degraded
+    it re-probes the self-hosted source on each poll and switches back as
+    soon as that source recovers.
 
-        if state["active"] == "official":
-            # Degraded: the probe is cheap and the payload is cached upstream, so
-            # it runs on every poll; any failure just keeps serving the website.
-            try:
-                records = await self._feed.fetch()
-            except FeedError:
-                return await self._announce_records()
-            if records and all(item.get("stale") for item in records):
-                return await self._announce_records()
-            await self.store.set_feed_active("")
-            await self._notify_feed_subscribers("自建公告源已恢复，推送切回自建源。")
-            return records
+    Returns:
+        Records to push, newest first.
 
-        delays = self._feed_retry_delays()
-        last_error = "未知错误"
-        for attempt in range(len(delays) + 1):
-            try:
-                records = await self._feed.fetch()
-            except FeedError as exc:
-                last_error = str(exc)
-            else:
-                if not (records and all(item.get("stale") for item in records)):
-                    return records
-                last_error = "自建源数据过期"
+    Raises:
+        AnnounceError: When the website source itself cannot be read.
+    """
+    configured = str(self.config.get("feed_source") or "selfhosted")
+    state = await self.store.feed_state()
 
-            if attempt < len(delays):
-                logger.warning(
-                    "[公告轮询] 自建源第 %d 次失败（%s），%.0f 分钟后重试",
-                    attempt + 1,
-                    last_error,
-                    delays[attempt],
-                )
-                await asyncio.sleep(delays[attempt] * 60)
-
-        # Every attempt failed: degrade, and say so exactly once.
-        await self.store.set_feed_active("official")
-        await self._notify_feed_subscribers(
-            f"自建公告源连续 {len(delays) + 1} 次获取失败，已自动降级到官网公告源。\n"
-            f"原因：{last_error}"
-        )
+    if configured == "official":
         return await self._announce_records()
 
-    async def _notify_feed_subscribers(self, text: str) -> None:
-        """Send a source-status notice to every announcement subscriber.
+    if state["active"] == "official":
+        # Degraded: the probe is cheap and the payload is cached upstream, so
+        # it runs on every poll; any failure just keeps serving the website.
+        try:
+            records = await self._feed.fetch()
+        except FeedError:
+            return await self._announce_records()
+        if records and all(item.get("stale") for item in records):
+            return await self._announce_records()
+        await self.store.set_feed_active("")
+        await self._notify_feed_subscribers("自建公告源已恢复，推送切回自建源。")
+        return records
 
-        Args:
-            text: Notice body.
-        """
-        for sub in await self.store.list_announce_subs():
-            umo = str(sub.get("umo") or "")
-            if umo:
-                await self._notify(umo, text)
+    delays = self._feed_retry_delays()
+    last_error = "未知错误"
+    for attempt in range(len(delays) + 1):
+        try:
+            records = await self._feed.fetch()
+        except FeedError as exc:
+            last_error = str(exc)
+        else:
+            if not (records and all(item.get("stale") for item in records)):
+                return records
+            last_error = "自建源数据过期"
+
+        if attempt < len(delays):
+            logger.warning(
+                "[公告轮询] 自建源第 %d 次失败（%s），%.0f 分钟后重试",
+                attempt + 1,
+                last_error,
+                delays[attempt],
+            )
+            await asyncio.sleep(delays[attempt] * 60)
+
+    # Every attempt failed: degrade, and say so exactly once.
+    await self.store.set_feed_active("official")
+    await self._notify_feed_subscribers(
+        f"自建公告源连续 {len(delays) + 1} 次获取失败，已自动降级到官网公告源。\n"
+        f"原因：{last_error}"
+    )
+    return await self._announce_records()
+
+
+async def _notify_feed_subscribers(self, text: str) -> None:
+    """Send a source-status notice to every announcement subscriber.
+
+    Args:
+        text: Notice body.
+    """
+    for sub in await self.store.list_announce_subs():
+        umo = str(sub.get("umo") or "")
+        if umo:
+            await self._notify(umo, text)
 ```
 
 在 `_announce_poll_job` 中把取数换成（重试与降级都包在 `_source_records` 里，`_announce_poll_job` 不需要知道当前用的是哪个源）：
@@ -2465,59 +2508,61 @@ git commit -m "feat: prefer the self-hosted source and degrade to the website"
 追加到 `tests/integration_check.py`，紧接 10 那段之后。**必须自己构造插件并显式配置关键词**——10 最后留下的那个 `plugin` 配的是 `{"feed_source": "official"}`，没设 `feed_exclude_keywords`，空关键词等于什么都不过滤。
 
 ```python
-    # ── 排除过滤：命中关键词的条目既不推送，也不推进水位线 ────────────────
-    FILTER_TS = int(time.time())
+# ── 排除过滤：命中关键词的条目既不推送，也不推进水位线 ────────────────
+FILTER_TS = int(time.time())
 
-    def filter_fixture(ident, title, ts):
-        return {
-            "id": ident,
-            "title": title,
-            "author": "明日方舟",
-            "brief": "",
-            "group": "OFFICIAL",
-            "group_cn": "官方",
-            "url": "",
-            "ts": ts,
-            "date_text": "2026-10-12 11:00",
-        }
 
-    filter_records = [
-        filter_fixture("1", "【签到福利】森空岛10月签到福利活动开启！", FILTER_TS - 60),
-        filter_fixture("2", "《明日方舟》EP - 大地之盐", FILTER_TS - 30),
-        filter_fixture("3", "【有奖活动】猜猜我是谁#2全新谜题开启！", FILTER_TS - 20),
-    ]
+def filter_fixture(ident, title, ts):
+    return {
+        "id": ident,
+        "title": title,
+        "author": "明日方舟",
+        "brief": "",
+        "group": "OFFICIAL",
+        "group_cn": "官方",
+        "url": "",
+        "ts": ts,
+        "date_text": "2026-10-12 11:00",
+    }
 
-    filtering = plugin_module.ArknightsPlugin(
-        context=SimpleNamespace(send_message=None),
-        config={"feed_exclude_keywords": "签到福利,有奖活动,模组"},
-    )
-    kept = filtering._filter_pushable(
-        filter_records, watermark=FILTER_TS - 120, now=FILTER_TS, window=86400
-    )
-    check("排除关键词被过滤", [item["id"] for item in kept] == ["2"], kept)
-    check(
-        "未命中关键词的条目不误伤",
-        filtering._is_excluded("《明日方舟》EP - 大地之盐") is False,
-        None,
-    )
 
-    # 关键词留空时必须全部放行，否则用户没法关掉过滤
-    permissive = plugin_module.ArknightsPlugin(
-        context=SimpleNamespace(send_message=None), config={"feed_exclude_keywords": ""}
-    )
-    all_kept = permissive._filter_pushable(
-        filter_records, watermark=FILTER_TS - 120, now=FILTER_TS, window=86400
-    )
-    check("关键词留空时不过滤", len(all_kept) == 3, all_kept)
+filter_records = [
+    filter_fixture("1", "【签到福利】森空岛10月签到福利活动开启！", FILTER_TS - 60),
+    filter_fixture("2", "《明日方舟》EP - 大地之盐", FILTER_TS - 30),
+    filter_fixture("3", "【有奖活动】猜猜我是谁#2全新谜题开启！", FILTER_TS - 20),
+]
 
-    # 时间窗口依旧生效：把「现在」推到 48 小时后，三条都过期
-    expired = filtering._filter_pushable(
-        filter_records,
-        watermark=FILTER_TS - 120,
-        now=FILTER_TS + 48 * 3600,
-        window=86400,
-    )
-    check("超出时间窗口的条目不会被推送", expired == [], expired)
+filtering = plugin_module.ArknightsPlugin(
+    context=SimpleNamespace(send_message=None),
+    config={"feed_exclude_keywords": "签到福利,有奖活动,模组"},
+)
+kept = filtering._filter_pushable(
+    filter_records, watermark=FILTER_TS - 120, now=FILTER_TS, window=86400
+)
+check("排除关键词被过滤", [item["id"] for item in kept] == ["2"], kept)
+check(
+    "未命中关键词的条目不误伤",
+    filtering._is_excluded("《明日方舟》EP - 大地之盐") is False,
+    None,
+)
+
+# 关键词留空时必须全部放行，否则用户没法关掉过滤
+permissive = plugin_module.ArknightsPlugin(
+    context=SimpleNamespace(send_message=None), config={"feed_exclude_keywords": ""}
+)
+all_kept = permissive._filter_pushable(
+    filter_records, watermark=FILTER_TS - 120, now=FILTER_TS, window=86400
+)
+check("关键词留空时不过滤", len(all_kept) == 3, all_kept)
+
+# 时间窗口依旧生效：把「现在」推到 48 小时后，三条都过期
+expired = filtering._filter_pushable(
+    filter_records,
+    watermark=FILTER_TS - 120,
+    now=FILTER_TS + 48 * 3600,
+    window=86400,
+)
+check("超出时间窗口的条目不会被推送", expired == [], expired)
 ```
 
 - [ ] **Step 2: 运行确认失败**

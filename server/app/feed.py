@@ -19,9 +19,7 @@ ZONAI_BASE = "https://zonai.skland.com"
 OFFICIAL_GAME_ID = 1
 OFFICIAL_CATE_ID = 1
 PAGE_SIZE = 10
-FEED_PATH = (
-    "/web/v2/home/index?gameId={game}&cateId={cate}&pageSize={size}&sortType=2"
-)
+FEED_PATH = "/web/v2/home/index?gameId={game}&cateId={cate}&pageSize={size}&sortType=2"
 ARTICLE_URL_TEMPLATE = "https://www.skland.com/article?id={id}"
 
 # Politeness delay between pages; the endpoint validates parameters strictly and
@@ -144,7 +142,9 @@ def normalize(
     ]
 
     try:
-        published_at = int(source.get("publishedAtTs") or item.get("publishedAtTs") or 0)
+        published_at = int(
+            source.get("publishedAtTs") or item.get("publishedAtTs") or 0
+        )
     except (TypeError, ValueError):
         published_at = 0
 

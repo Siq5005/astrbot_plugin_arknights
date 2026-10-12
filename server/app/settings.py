@@ -44,7 +44,7 @@ class Settings:
     stale_minutes: int
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         """Build settings from the environment.
 
         Returns:
@@ -53,7 +53,9 @@ class Settings:
         return cls(
             api_key=os.environ.get("ARKSOURCE_API_KEY", "").strip(),
             credential_file=Path(
-                os.environ.get("ARKSOURCE_CREDENTIAL_FILE", "/opt/arksource/credentials.json")
+                os.environ.get(
+                    "ARKSOURCE_CREDENTIAL_FILE", "/opt/arksource/credentials.json"
+                )
             ),
             state_file=Path(
                 os.environ.get("ARKSOURCE_STATE_FILE", "/opt/arksource/state.json")
