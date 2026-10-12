@@ -653,7 +653,6 @@ Expected: PASS（6 passed）
 
 ```python
 # 追加到 server/tests/test_feed.py
-import httpx
 import pytest
 
 from app.feed import FeedError, fetch_official
