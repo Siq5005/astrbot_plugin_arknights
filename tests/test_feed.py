@@ -178,6 +178,49 @@ async def test_fetch_survives_unexpected_item_shapes():
 
 
 @pytest.mark.anyio
+async def test_fetch_survives_out_of_range_timestamp():
+    """An out-of-range timestamp renders as unknown instead of escaping.
+
+    ``datetime.fromtimestamp(10**19)`` raises ``OverflowError``, which is an
+    ``ArithmeticError`` and therefore not a ``ValueError``/``OSError``/
+    ``TypeError``. Without the widened except clause it escapes ``fetch()`` as a
+    non-``FeedError`` and bypasses the degradation path, which keys on
+    ``FeedError`` only.
+    """
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "data": {
+                    "stale": False,
+                    "items": [
+                        {
+                            "id": "7",
+                            "title": "t",
+                            "kind": 1,
+                            "published_at": 10**19,
+                            "text": "b",
+                            "url": "https://x/7",
+                        }
+                    ],
+                },
+            },
+        )
+
+    client = _client(handler)
+    records = await client.fetch()
+    await client.close()
+
+    assert len(records) == 1
+    record = records[0]
+    assert record["id"] == "7"
+    assert record["ts"] == 10**19
+    assert record["date_text"] == ""
+
+
+@pytest.mark.anyio
 async def test_body_html_escapes_text_and_orders_images():
     """The card body is HTML-safe and lists the cover before the other images."""
 

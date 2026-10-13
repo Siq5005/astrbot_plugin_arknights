@@ -34,8 +34,17 @@ def _format_time(stamp: Any) -> str:
         ``YYYY-MM-DD HH:MM``, or an empty string when unparsable.
     """
     try:
-        return datetime.fromtimestamp(int(stamp)).strftime("%Y-%m-%d %H:%M")
-    except (TypeError, ValueError, OSError):
+        seconds = int(stamp)
+    except (TypeError, ValueError):
+        return ""
+    if seconds <= 0:
+        return ""
+    try:
+        return datetime.fromtimestamp(seconds).strftime("%Y-%m-%d %H:%M")
+    except (OSError, OverflowError, ValueError):
+        # A JSON integer outside time_t range reaches fromtimestamp as
+        # OverflowError, which is an ArithmeticError and would otherwise escape
+        # `fetch()` as a non-FeedError. Mirrors core/announce.py.
         return ""
 
 
