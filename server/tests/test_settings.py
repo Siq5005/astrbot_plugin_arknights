@@ -31,3 +31,12 @@ def test_from_env_reads_overrides(monkeypatch):
     assert settings.api_key == "secret-key"
     assert settings.port == 9999
     assert settings.credential_file == Path("/tmp/cred.json")
+
+
+def test_from_env_floors_poll_interval_at_one_second(monkeypatch):
+    monkeypatch.setenv("ARKSOURCE_POLL_INTERVAL", "0")
+
+    settings = Settings.from_env()
+
+    # A zero interval would busy-loop against Skland with no delay.
+    assert settings.poll_interval_seconds == 1

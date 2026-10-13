@@ -3,7 +3,14 @@
 import time
 
 import pytest
-from app.feed import FeedError, document_to_text, fetch_official, normalize
+from app.details import DetailStore
+from app.feed import (
+    _MAX_DETAIL_FETCHES,
+    FeedError,
+    document_to_text,
+    fetch_official,
+    normalize,
+)
 
 
 def test_document_to_text_joins_text_blocks_in_order():
@@ -114,9 +121,11 @@ def test_normalize_reads_text_from_document():
 class _FakeSkland:
     """Minimal stand-in for SklandClient, recording requested URLs."""
 
-    def __init__(self, pages):
-        self._pages = pages
+    def __init__(self, pages, details=None):
+        self._pages = list(pages)
+        self._details = dict(details or {})
         self.urls = []
+        self.detail_urls = []
 
     async def get_device_id(self):
         return "did"
@@ -132,6 +141,15 @@ class _FakeSkland:
 
     async def _request(self, method, url, headers=None, json_data=None, content=None):
         self.urls.append(url)
+        if "/web/v2/item" in url:
+            self.detail_urls.append(url)
+            item_id = url.split("id=", 1)[1].split("&", 1)[0]
+            result = self._details.get(item_id)
+            if isinstance(result, Exception):
+                raise result
+            if result is not None:
+                return result
+            return {"code": 0, "data": {"item": {}}}
         return self._pages.pop(0)
 
 
@@ -235,3 +253,104 @@ async def test_fetch_official_follows_page_token_dedupes_and_orders_newest_first
     )
     # An id repeated across pages is emitted once.
     assert [record["id"] for record in records].count(duplicate_id) == 1
+
+
+def _detail_envelope(text):
+    """Build a detail-endpoint payload whose item carries ``text`` as its body."""
+    return {
+        "code": 0,
+        "data": {
+            "item": {
+                "document": {
+                    "blockIds": ["a"],
+                    "blockMap": {
+                        "a": {
+                            "kind": "text",
+                            "text": {
+                                "inlineElements": [
+                                    {"kind": "text", "text": {"text": text}}
+                                ]
+                            },
+                        }
+                    },
+                }
+            }
+        },
+    }
+
+
+def _list_row(item_id, title, published_at):
+    return {
+        "item": {
+            "id": item_id,
+            "title": title,
+            "viewKind": 1,
+            "publishedAtTs": published_at,
+        },
+        "tags": [],
+    }
+
+
+def _list_page(rows):
+    return {"code": 0, "data": {"list": rows, "hasMore": False, "pageToken": ""}}
+
+
+@pytest.mark.anyio
+async def test_fetch_official_fetches_detail_once_and_reuses_the_cache(tmp_path):
+    store = DetailStore(tmp_path / "state.json")
+    now = int(time.time())
+    page = _list_page([_list_row("1", "t", now - 60)])
+
+    first = _FakeSkland([page], details={"1": _detail_envelope("正文")})
+    records = await fetch_official(first, "tok", now=now, details=store)
+    assert records[0]["text"] == "正文"
+    assert len(first.detail_urls) == 1
+
+    # A second refresh re-reads the same window; the cached body must not be
+    # fetched again.
+    second = _FakeSkland([page], details={"1": _detail_envelope("正文")})
+    records = await fetch_official(second, "tok", now=now, details=store)
+    assert records[0]["text"] == "正文"
+    assert len(second.detail_urls) == 0
+
+
+@pytest.mark.anyio
+async def test_fetch_official_survives_a_failing_detail(tmp_path):
+    store = DetailStore(tmp_path / "state.json")
+    now = int(time.time())
+    page = _list_page(
+        [
+            _list_row("good", "good", now - 60),
+            _list_row("bad", "bad", now - 30),
+        ]
+    )
+    fake = _FakeSkland(
+        [page],
+        details={
+            "good": _detail_envelope("好正文"),
+            "bad": {"code": 10001, "message": "参数错误"},
+        },
+    )
+
+    records = await fetch_official(fake, "tok", now=now, details=store)
+
+    by_id = {record["id"]: record for record in records}
+    assert len(records) == 2
+    assert by_id["good"]["text"] == "好正文"
+    assert by_id["bad"]["text"] == ""
+
+
+@pytest.mark.anyio
+async def test_fetch_official_caps_detail_fetches_per_refresh(tmp_path):
+    store = DetailStore(tmp_path / "state.json")
+    now = int(time.time())
+    rows = [_list_row(str(i), f"t{i}", now - i) for i in range(_MAX_DETAIL_FETCHES + 2)]
+    fake = _FakeSkland(
+        [_list_page(rows)],
+        details={str(i): _detail_envelope(f"正文{i}") for i in range(len(rows))},
+    )
+
+    records = await fetch_official(fake, "tok", now=now, details=store)
+
+    assert len(fake.detail_urls) == _MAX_DETAIL_FETCHES
+    assert len([r for r in records if r["text"]]) == _MAX_DETAIL_FETCHES

@@ -13,8 +13,11 @@ alongside a ``hasMore`` flag.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 ZONAI_BASE = "https://zonai.skland.com"
 OFFICIAL_GAME_ID = 1
@@ -28,6 +31,13 @@ ARTICLE_URL_TEMPLATE = "https://www.skland.com/article?id={id}"
 _PAGE_DELAY_SECONDS = 0.5
 # Hard stop so a feed that never reports hasMore=false cannot loop forever.
 _MAX_PAGES = 40
+
+# Detail requests are one per item, so they are paced and capped independently of
+# the list paging. The 72-hour window can hold dozens of items on a cold start;
+# the cap lets each refresh make bounded progress while the cache makes it
+# durable across refreshes.
+_DETAIL_DELAY_SECONDS = 0.5
+_MAX_DETAIL_FETCHES = 10
 
 
 class FeedError(Exception):
@@ -172,6 +182,7 @@ async def fetch_official(
     user_token: str,
     window_hours: int = 72,
     now: int | None = None,
+    details: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Read the Arknights official column, newest first.
 
@@ -180,6 +191,8 @@ async def fetch_official(
         user_token: Long-lived Hypergryph passport token.
         window_hours: Stop paging once items fall outside this age window.
         now: Unix seconds to compare against; defaults to the system clock.
+        details: Optional ``DetailStore``; when provided, empty item bodies are
+            filled from the cache or fetched once and remembered.
 
     Returns:
         Normalised records, newest first.
@@ -195,6 +208,7 @@ async def fetch_official(
     cutoff = reference - max(1, window_hours) * 3600
 
     records: list[dict[str, Any]] = []
+    raw_by_id: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
     page_token: str | None = None
     seen: set[str] = set()
 
@@ -233,11 +247,13 @@ async def fetch_official(
             if not item_id or item_id in seen:
                 continue
             seen.add(item_id)
-            record = normalize(raw, tags=row.get("tags") or [])
+            row_tags = row.get("tags") or []
+            record = normalize(raw, tags=row_tags)
             oldest = min(oldest, record["published_at"] or reference)
             if record["published_at"] and record["published_at"] < cutoff:
                 continue
             records.append(record)
+            raw_by_id[item_id] = (raw, row_tags)
 
         page_token = data.get("pageToken")
         if not data.get("hasMore") or not page_token or oldest < cutoff:
@@ -246,4 +262,44 @@ async def fetch_official(
             await asyncio.sleep(_PAGE_DELAY_SECONDS)
 
     records.sort(key=lambda entry: (entry["published_at"], entry["id"]), reverse=True)
+
+    if details is not None:
+        fetched = 0
+        for record in records:
+            if record["text"]:
+                continue
+            cached = details.get(record["id"])
+            if cached is not None:
+                record["text"] = cached
+                continue
+            if fetched >= _MAX_DETAIL_FETCHES:
+                break
+            if fetched:
+                await asyncio.sleep(_DETAIL_DELAY_SECONDS)
+            fetched += 1
+            raw, row_tags = raw_by_id[record["id"]]
+            try:
+                detail_url = f"{ZONAI_BASE}/web/v2/item?id={record['id']}"
+                detail_headers = client._signed_headers(
+                    detail_url, "GET", None, cred, did
+                )
+                payload = await client._request(
+                    "GET", detail_url, headers=detail_headers
+                )
+                if not isinstance(payload, dict) or payload.get("code") not in (
+                    0,
+                    None,
+                ):
+                    raise FeedError(f"森空岛详情接口返回异常: {payload}")
+                data = payload.get("data")
+                item = data.get("item") if isinstance(data, dict) else None
+                if not isinstance(item, dict):
+                    raise FeedError("森空岛详情响应缺少 item")
+                record["text"] = normalize(raw, detail_item=item, tags=row_tags)["text"]
+                details.put(record["id"], record["text"])
+            except Exception as exc:  # noqa: BLE001 - one bad post must not sink the feed
+                logger.warning("skipping detail for item %s: %s", record["id"], exc)
+        details.prune({record["id"] for record in records})
+        details.save()
+
     return records

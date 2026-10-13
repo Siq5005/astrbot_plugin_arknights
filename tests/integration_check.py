@@ -830,7 +830,7 @@ async def main() -> int:
     )
     check("feed_source=official 时不请求自建源", feeder.calls == 0, feeder.calls)
 
-    # ── 排除过滤：命中关键词的条目既不推送，也不推进水位线 ────────────────
+    # ── 排除过滤：命中关键词的条目不推送，但水位线仍按全部条目推进 ────────
     FILTER_TS = int(time.time())
 
     def filter_fixture(ident, title, ts):

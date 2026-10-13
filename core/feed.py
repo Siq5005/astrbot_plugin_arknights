@@ -129,7 +129,10 @@ class FeedClient:
 
         try:
             payload = response.json()
-        except ValueError as exc:
+        except (ValueError, httpx.HTTPError) as exc:
+            # DecodingError subclasses HTTPError, not ValueError: a truncated or
+            # mis-encoded body would otherwise escape as a non-FeedError and
+            # bypass the retry/degradation path, which keys on FeedError only.
             raise FeedError(f"自建源响应格式异常: HTTP {response.status_code}") from exc
 
         message = ""
@@ -195,4 +198,10 @@ class FeedClient:
             )
 
         records.sort(key=lambda entry: (entry["ts"], entry["id"]), reverse=True)
+        if stale and not records:
+            # An empty envelope with stale=true means the aggregator has no data
+            # in memory and is not refreshing — typically a dead credential on a
+            # fresh deploy. Returning [] would look like a successful poll and
+            # silently stop the push, so fail loudly into retry/degrade instead.
+            raise FeedError("自建源无数据且未在刷新，凭证可能已失效")
         return records

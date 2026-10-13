@@ -283,3 +283,74 @@ async def test_trailing_slash_and_borrowed_client_ownership():
     await client.close()
     assert borrowed.is_closed is False
     await borrowed.aclose()
+
+
+@pytest.mark.anyio
+async def test_fetch_translates_decoding_error_from_json():
+    """A ``DecodingError`` inside ``response.json()`` degrades as ``FeedError``.
+
+    ``httpx.DecodingError`` subclasses ``httpx.HTTPError``, not ``ValueError``.
+    In httpx 0.28 the content-decoding failure surfaces during the eager
+    ``response.read()`` inside ``get()``, where the transport clause already
+    translates it. This test pins the ``.json()`` clause itself with a
+    hand-built response, so a future httpx (or a streaming client) that raises
+    ``DecodingError`` from ``.json()`` cannot bypass degradation.
+    """
+
+    class DecodingResponse:
+        status_code = 200
+
+        def json(self):
+            raise httpx.DecodingError("truncated gzip body")
+
+    class DecodingClient:
+        async def get(self, url, headers=None):
+            return DecodingResponse()
+
+    client = FeedClient(client=DecodingClient())
+    with pytest.raises(FeedError, match="响应格式异常") as excinfo:
+        await client.fetch()
+    await client.close()
+
+    # The cause proves DecodingError really fired and was translated, rather
+    # than the test passing because some other failure produced a FeedError.
+    assert isinstance(excinfo.value.__cause__, httpx.DecodingError)
+
+
+@pytest.mark.anyio
+async def test_fetch_raises_when_stale_and_empty():
+    """A stale envelope with no items fails loudly instead of stopping the push."""
+
+    def handler(request):
+        return httpx.Response(
+            200, json={"code": 0, "data": {"stale": True, "items": []}}
+        )
+
+    client = _client(handler)
+    with pytest.raises(FeedError, match="无数据"):
+        await client.fetch()
+    await client.close()
+
+
+@pytest.mark.anyio
+async def test_fetch_returns_records_when_stale_but_nonempty():
+    """Serving older cached data under ``stale=true`` keeps working as before."""
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "data": {
+                    "stale": True,
+                    "items": [{"id": "1", "title": "t", "published_at": 100}],
+                },
+            },
+        )
+
+    client = _client(handler)
+    records = await client.fetch()
+    await client.close()
+
+    assert len(records) == 1
+    assert records[0]["stale"] is True

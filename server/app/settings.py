@@ -62,7 +62,8 @@ class Settings:
             ),
             host=os.environ.get("ARKSOURCE_HOST", "127.0.0.1").strip(),
             port=_env_int("ARKSOURCE_PORT", 8788),
-            poll_interval_seconds=_env_int("ARKSOURCE_POLL_INTERVAL", 600),
+            # A zero interval would busy-loop against Skland with no delay.
+            poll_interval_seconds=max(1, _env_int("ARKSOURCE_POLL_INTERVAL", 600)),
             window_hours=_env_int("ARKSOURCE_WINDOW_HOURS", 72),
             stale_minutes=_env_int("ARKSOURCE_STALE_MINUTES", 60),
         )

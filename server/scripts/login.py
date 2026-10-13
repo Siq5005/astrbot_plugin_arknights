@@ -97,6 +97,9 @@ async def main() -> int:
             scan_code = await client.poll_qr(qr["scan_id"])
             if scan_code:
                 token = await client.get_token_by_scan_code(scan_code)
+                if not token:
+                    print("登录失败：未获取到凭证，请重新运行本脚本。")
+                    return 1
                 save_user_token(Path(args.output), token)
                 print(f"登录成功，凭证已写入 {args.output}")
                 return 0

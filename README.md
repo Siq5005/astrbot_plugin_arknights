@@ -98,7 +98,7 @@ playwright install chromium
 | `announce_poll_interval` | int | `30` | 公告订阅轮询间隔（分钟），下限 15 分钟 |
 | `announce_push_cards` | int | `3` | 公告推送附带详情卡的数量；前 N 条渲染为卡片（含配图），其余只给标题，`0` 表示全部只发文字 |
 | `announce_max_age_hours` | int | `24` | 公告推送时间窗口（小时）。只推送发布时间在窗口内的公告 |
-| `feed_source` | string | `selfhosted` | 公告推送数据源。`selfhosted` = 自建森空岛「官方」栏目源（含 PV / EP 视频等官网没有的动态）；`official` = 官网公告源。自建源失败会自动降级到官网源 |
+| `feed_source` | string | `selfhosted` | 公告推送数据源。`selfhosted` = 自建森空岛「官方」栏目源（含 PV / EP 视频等官网没有的动态）；`official` = 官网公告源。自建源连续失败会自动降级到官网源 |
 | `feed_base_url` | string | `https://ark.youyou.ink/api/ark/v1` | 自建源地址，默认无需修改 |
 | `feed_api_key` | string | `（已内置）` | 自建源访问密钥。默认值随插件内置，无需修改 |
 | `feed_exclude_keywords` | string | `签到福利,周记表,每日谜题,猜猜我是谁,创作集锦,版区作品,模组,游戏工具,有奖活动,创作者应援,讨论楼,热议` | 公告推送排除关键词，英文逗号分隔；标题命中任一关键词的条目不推送。留空则不过滤 |

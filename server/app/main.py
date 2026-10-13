@@ -7,6 +7,7 @@ Two endpoints: ``/api/ark/v1/feed`` for the plugin (API-key gated) and
 from __future__ import annotations
 
 import asyncio
+import secrets
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -15,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from .cache import FeedCache
 from .credentials import load_user_token
+from .details import DetailStore
 from .feed import fetch_official
 from .settings import Settings
 from .skland_client import SklandClient
@@ -35,6 +37,11 @@ def build_fetcher(settings: Settings) -> Any:
         RuntimeError: When no passport token has been provisioned yet.
     """
 
+    try:
+        details = DetailStore(settings.state_file)
+    except Exception:  # noqa: BLE001 - state-file trouble must not break the feed
+        details = None
+
     async def fetcher() -> list[dict[str, Any]]:
         token = load_user_token(settings.credential_file)
         if not token:
@@ -42,7 +49,7 @@ def build_fetcher(settings: Settings) -> Any:
         client = SklandClient()
         try:
             return await fetch_official(
-                client, token, window_hours=settings.window_hours
+                client, token, window_hours=settings.window_hours, details=details
             )
         finally:
             await client.close()
@@ -100,7 +107,7 @@ def create_app(
     async def feed(x_api_key: str = Header(default="")):
         """Return the normalised official feed."""
         expected = resolved.api_key
-        if not expected or x_api_key != expected:
+        if not expected or not secrets.compare_digest(x_api_key, expected):
             return JSONResponse(
                 status_code=401,
                 content={"code": 401, "message": "缺少或无效的 X-API-Key"},
