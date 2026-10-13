@@ -2758,6 +2758,135 @@ Expected: `active`；日志出现自建源取数成功（首次轮询会初始�
 
 ---
 
+## Task 13: 定时任务宽限（0.4.1）
+
+**Files:**
+- Modify: `main.py`（`initialize()` 里的三处 `scheduler.add_job`）
+- Modify: `tests/integration_check.py`
+- Modify: `metadata.yaml`、`README.md`
+
+**Interfaces:**
+- Consumes: `initialize()` 中已有的三个 `add_job` 调用（`arknights_auto_sign` / `arknights_sanity_poll` / `arknights_announce_poll`）
+- Produces: 三个任务都显式带上 `misfire_grace_time`
+
+**背景（实测复现，非本分支引入）**：APScheduler 的 `misfire_grace_time` 默认只有 **1 秒**。调度点到来时若事件循环被占用超过 1 秒，这次执行会被**静默跳过**，只在日志里留一行
+`Run time of job ... was missed by 0:00:01.118849`。本插件在同一事件循环上跑多秒级的 Playwright 渲染，很容易触发——公告轮询被跳过就意味着推送晚一整个周期（默认 30 分钟），签到被跳过则更严重。
+
+- [ ] **Step 1: 写失败的断言**
+
+追加到 `tests/integration_check.py` 的 `main()` 内、紧接既有的调度器断言之后（那里已经构造了 `plugin`、调用了 `initialize()`，并在 `terminate()` 之前）：
+
+```python
+    check("scheduler starts with two jobs", plugin.scheduler is not None)  # 既有断言，保持不动
+```
+
+在这行与 `await plugin.terminate()` 之间插入：
+
+```python
+    # APScheduler defaults misfire_grace_time to one second, so a run delayed by
+    # an event-loop stall is skipped outright — a skipped announce poll means the
+    # push slips a whole interval. Every job must carry a generous grace.
+    jobs = {job.id: job for job in plugin.scheduler.get_jobs()}
+    check("三个定时任务都已注册", len(jobs) == 3, sorted(jobs))
+    check(
+        "每个定时任务都有足够的 misfire 宽限",
+        all((job.misfire_grace_time or 0) >= 300 for job in jobs.values()),
+        {jid: job.misfire_grace_time for jid, job in jobs.items()},
+    )
+```
+
+- [ ] **Step 2: 运行确认失败**
+
+Run: `/Users/coe/project/AstrBot/.venv/bin/python tests/integration_check.py`
+Expected: FAIL —— `每个定时任务都有足够的 misfire 宽限 — {'arknights_auto_sign': 1, ...}`
+
+- [ ] **Step 3: 给三处 `add_job` 加宽限**
+
+在 `initialize()` 中：
+
+```python
+            self.scheduler.add_job(
+                self._auto_sign_job,
+                CronTrigger(hour=hour, minute=minute),
+                id="arknights_auto_sign",
+                replace_existing=True,
+                # A stall around 00:05 must not cost the whole day's sign-in.
+                misfire_grace_time=3600,
+            )
+            self.scheduler.add_job(
+                self._sanity_poll_job,
+                IntervalTrigger(minutes=minutes),
+                id="arknights_sanity_poll",
+                replace_existing=True,
+                misfire_grace_time=300,
+            )
+            announce_minutes = max(
+                15, int(self.config.get("announce_poll_interval", 30) or 30)
+            )
+            self.scheduler.add_job(
+                self._announce_poll_job,
+                IntervalTrigger(minutes=announce_minutes),
+                id="arknights_announce_poll",
+                replace_existing=True,
+                # Rendering blocks the same event loop for seconds; without this
+                # the poll is skipped and the push slips a whole interval.
+                misfire_grace_time=300,
+            )
+```
+
+- [ ] **Step 3b: 顺手修正那行日志**
+
+`initialize()` 末尾的启动日志只提到签到和理智，没有公告轮询，且只在没有异常时才打印——公告轮询是这次新增的最大的一块，值得出现在启动日志里。改成：
+
+```python
+            logger.info(
+                "罗德岛终端定时任务已启动：签到 %02d:%02d，理智轮询每 %d 分钟，公告轮询每 %d 分钟",
+                hour,
+                minute,
+                minutes,
+                announce_minutes,
+            )
+```
+
+- [ ] **Step 4: 运行确认通过**
+
+Run: `/Users/coe/project/AstrBot/.venv/bin/python tests/integration_check.py`
+Expected: 全部通过，新增 2 条断言 PASS
+
+- [ ] **Step 5: 版本号 0.4.0 → 0.4.1（四处）**
+
+`metadata.yaml` 的 `version`、`main.py` 的 `PLUGIN_VERSION`、`README.md` 的版本徽章与更新日志标题。缺一处 `tests/integration_check.py` 就会报错。
+
+- [ ] **Step 6: README 更新日志**
+
+```markdown
+### 0.4.1 (2026-10-13)
+
+- 修复定时任务可能被静默跳过的问题：APScheduler 的 `misfire_grace_time` 默认仅 1 秒，
+  事件循环被渲染占用超过 1 秒时该次执行会被丢弃——公告推送会因此晚一个轮询周期，
+  每日签到甚至可能整天不执行。现在签到给 1 小时宽限，理智与公告轮询各给 5 分钟。
+- 启动日志现在也会报告公告轮询的间隔。
+```
+
+- [ ] **Step 7: 跑全量测试与格式检查**
+
+Run:
+```bash
+/Users/coe/project/AstrBot/.venv/bin/python -m pytest tests -q
+/Users/coe/project/AstrBot/.venv/bin/python tests/integration_check.py
+/Users/coe/project/AstrBot/.venv/bin/ruff check . && /Users/coe/project/AstrBot/.venv/bin/ruff format --check .
+```
+Expected: 全 PASS；ruff 干净
+
+- [ ] **Step 8: 提交**
+
+```bash
+git add main.py tests/integration_check.py metadata.yaml README.md
+git commit -m "fix: give the scheduled jobs a misfire grace period (0.4.1)"
+```
+
+---
+
 ## 自检记录
 
 **1. 规格覆盖**
