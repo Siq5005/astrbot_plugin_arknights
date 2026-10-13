@@ -1838,8 +1838,17 @@ def _format_time(stamp: Any) -> str:
         ``YYYY-MM-DD HH:MM``, or an empty string when unparsable.
     """
     try:
-        return datetime.fromtimestamp(int(stamp)).strftime("%Y-%m-%d %H:%M")
-    except (TypeError, ValueError, OSError):
+        seconds = int(stamp)
+    except (TypeError, ValueError):
+        return ""
+    if seconds <= 0:
+        return ""
+    try:
+        return datetime.fromtimestamp(seconds).strftime("%Y-%m-%d %H:%M")
+    except (OSError, OverflowError, ValueError):
+        # A JSON integer outside time_t range reaches fromtimestamp as
+        # OverflowError, which is an ArithmeticError and would otherwise escape
+        # `fetch()` as a non-FeedError. Mirrors core/announce.py.
         return ""
 
 
@@ -2469,7 +2478,7 @@ from .core.feed import DEFAULT_BASE_URL, FeedClient, FeedError
                 await self._notify(umo, text)
 ```
 
-在 `_announce_poll_job` 中把取数换成（重试与降级都包在 `_source_records` 里，`_announce_poll_job` 不需要知道当前用的是哪个源）：
+在 `_announce_poll_job` 中把取数换成：
 
 ```python
         try:
@@ -2480,6 +2489,44 @@ from .core.feed import DEFAULT_BASE_URL, FeedClient, FeedError
         if not records:
             return
 ```
+
+**同时必须改卡片那一段——这是一个真实的跨任务坑。** `_announce_poll_job` 现在无条件调用
+`self._announce.fetch_detail(item["id"])` 去官网取正文。但自建源的记录**自带** `body_html` /
+`text` / `images` / `image_total`，而它的 `id` 是森空岛帖子号（形如 `6377378`）——拿它去请求
+`https://ak.hypergryph.com/news/6377378` 只会拿到 404，异常被吞掉后退化成没有配图的纯文字卡片，
+每条还白打一次官网请求。所以卡片构建要按记录内容分流：
+
+```python
+        card_limit = max(0, int(self.config.get("announce_push_cards", 3) or 0))
+        cards: list[tuple[dict[str, Any], Path | None]] = []
+        for item in fresh[:card_limit]:
+            # The self-hosted source ships the body with the record, so there is
+            # nothing to fetch; its ids are Skland post ids and would 404 against
+            # the website's detail route.
+            if item.get("body_html") is not None:
+                detail = {
+                    "cid": item["id"],
+                    "url": item.get("url", ""),
+                    "body_html": item["body_html"],
+                    "text": item.get("text", ""),
+                    "images": item.get("images", []),
+                    "image_total": item.get("image_total", 0),
+                }
+            else:
+                try:
+                    detail = await self._announce.fetch_detail(item["id"])
+                except AnnounceError as exc:
+                    logger.warning("[公告轮询] %s 正文获取失败: %s", item["id"], exc)
+                    cards.append((item, None))
+                    continue
+            image = await self._render(
+                "announce_detail.html", {"announce": {**item, **detail}}
+            )
+            cards.append((item, image))
+```
+
+`FeedClient.fetch()` 产出的记录里 `body_html` 一定存在（可能为空字符串），官网源的记录里一定不存在，
+所以用 `is not None` 判断而不是判真值。
 
 **不需要额外的健康探测任务。** 重试是在 `_source_records` 内按 `feed_retry_delays` 就地等待并重试的，全在同一次轮询里完成：默认 `1,3,5` 合计 9 分钟，远小于 30 分钟的轮询间隔，而该任务已设 `max_instances=1`，下一次轮询不会与它重叠。
 
