@@ -112,7 +112,10 @@ class FeedClient:
             response = await self._get_client().get(
                 url, headers={"X-API-Key": self.api_key}
             )
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            # InvalidURL does not subclass HTTPError, so a mistyped base_url
+            # would otherwise escape as a non-FeedError and bypass the retry and
+            # degradation path in `_source_records`, which keys on FeedError.
             raise FeedError(f"自建源请求失败: {exc}") from exc
 
         try:

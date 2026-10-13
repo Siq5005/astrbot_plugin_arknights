@@ -74,6 +74,29 @@ async def test_fetch_raises_on_http_error():
 
 
 @pytest.mark.anyio
+async def test_fetch_raises_feed_error_on_malformed_base_url():
+    """A mistyped base URL degrades as FeedError, never as raw httpx.InvalidURL.
+
+    An invalid port makes ``httpx.URL`` raise ``httpx.InvalidURL`` while the
+    request is built. ``InvalidURL`` does not subclass ``httpx.HTTPError``, so
+    without the widened except clause it would escape as a non-``FeedError`` and
+    bypass the degradation path, which keys on ``FeedError`` only.
+    """
+
+    def handler(request):
+        raise AssertionError("the request must never reach the transport")
+
+    client = _client(handler, base_url="https://ark.youyou.ink:notaport/api/ark/v1")
+    with pytest.raises(FeedError, match="Invalid port") as excinfo:
+        await client.fetch()
+    await client.close()
+
+    # The cause proves InvalidURL really fired and was translated, rather than
+    # the test passing because some other failure produced a FeedError.
+    assert isinstance(excinfo.value.__cause__, httpx.InvalidURL)
+
+
+@pytest.mark.anyio
 async def test_fetch_raises_on_401():
     def handler(request):
         return httpx.Response(
