@@ -142,3 +142,56 @@ async def test_corrupt_file_is_recovered(tmp_path):
     store = Store(path)
     await store.upsert_auth("u1", "tok", "n", [{"uid": "1", "nick_name": "A"}])
     assert (await store.get_user("u1"))["token"] == "tok"
+
+
+@pytest.mark.anyio
+async def test_feed_state_defaults_to_empty(tmp_path):
+    store = Store(tmp_path / "users.json")
+
+    state = await store.feed_state()
+
+    assert state == {"active": ""}
+
+
+@pytest.mark.anyio
+async def test_set_feed_active_persists(tmp_path):
+    path = tmp_path / "users.json"
+    store = Store(path)
+    await store.set_feed_active("official")
+
+    reopened = Store(path)
+
+    assert (await reopened.feed_state())["active"] == "official"
+
+
+@pytest.mark.anyio
+async def test_feed_state_tolerates_legacy_file(tmp_path):
+    path = tmp_path / "users.json"
+    path.write_text(json.dumps({"users": {"u1": {"token": "tok"}}}), encoding="utf-8")
+    store = Store(path)
+
+    assert await store.feed_state() == {"active": ""}
+
+    await store.set_feed_active("official")
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["feed"] == {"active": "official"}
+    assert data["users"]["u1"]["token"] == "tok"
+
+
+@pytest.mark.anyio
+async def test_feed_state_tolerates_corrupt_value(tmp_path):
+    path = tmp_path / "users.json"
+    path.write_text(json.dumps({"feed": "official"}), encoding="utf-8")
+
+    assert await Store(path).feed_state() == {"active": ""}
+
+
+@pytest.mark.anyio
+async def test_feed_state_returns_a_copy(tmp_path):
+    store = Store(tmp_path / "users.json")
+    state = await store.feed_state()
+
+    state["active"] = "official"
+
+    assert (await store.feed_state())["active"] == ""

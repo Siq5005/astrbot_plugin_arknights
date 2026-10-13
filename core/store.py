@@ -40,6 +40,10 @@ def _empty() -> dict[str, Any]:
         "users": {},
         "subs": {"sanity": [], "sign_groups": [], "announce": []},
         "announce": {"watermark": 0},
+        # ``feed`` records whether the plugin has degraded away from the
+        # self-hosted source. It lives here so a restart cannot lose a
+        # degradation that is in progress. ``""`` means "not degraded".
+        "feed": {"active": ""},
     }
 
 
@@ -355,4 +359,29 @@ class Store:
         async with self._lock:
             data = self._read()
             data["announce"] = {"watermark": int(stamp)}
+            self._write(data)
+
+    async def feed_state(self) -> dict[str, Any]:
+        """Read the announcement source state.
+
+        Returns:
+            Mapping with ``active``: ``"selfhosted"``, ``"official"``, or ``""``
+            when the plugin has never degraded.
+        """
+        data = self._read()
+        state = data.get("feed")
+        if not isinstance(state, dict):
+            return {"active": ""}
+        return {"active": str(state.get("active") or "")}
+
+    async def set_feed_active(self, active: str) -> None:
+        """Record which source is currently serving pushes.
+
+        Args:
+            active: ``"selfhosted"`` or ``"official"``.
+        """
+        async with self._lock:
+            data = self._read()
+            state = data.setdefault("feed", {"active": ""})
+            state["active"] = str(active)
             self._write(data)
