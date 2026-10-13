@@ -2566,7 +2566,10 @@ git commit -m "feat: prefer the self-hosted source and degrade to the website"
 追加到 `tests/integration_check.py`，紧接 10 那段之后。**必须自己构造插件并显式配置关键词**——10 最后留下的那个 `plugin` 配的是 `{"feed_source": "official"}`，没设 `feed_exclude_keywords`，空关键词等于什么都不过滤。
 
 ```python
-    # ── 排除过滤：命中关键词的条目既不推送，也不推进水位线 ────────────────
+    # ── 排除过滤：命中关键词的条目不推送 ──────────────────────────────
+    # 水位线仍按「全部」条目的最新时间推进（_announce_poll_job 里 newest 取自 records
+    # 而非 fresh）。这是有意的：被排除的条目不该在后续每次轮询里反复进入候选。副作用是
+    # 用户事后把某个关键词从排除列表里去掉时，那条旧内容不会补推——它已经是旧闻了。
     FILTER_TS = int(time.time())
 
     def filter_fixture(ident, title, ts):
