@@ -1532,6 +1532,36 @@ class ArknightsPlugin(Star):
             return False
         return any(keyword in (title or "") for keyword in keywords)
 
+    def _filter_pushable(
+        self,
+        records: list[dict[str, Any]],
+        watermark: int,
+        now: float,
+        window: int,
+    ) -> list[dict[str, Any]]:
+        """Select the records worth pushing.
+
+        A record qualifies when it is newer than the watermark, falls inside the
+        age window, and is not excluded by keyword. Filtering happens here rather
+        than at the source so both sources behave identically.
+
+        Args:
+            records: Candidate records, newest first.
+            watermark: Newest timestamp already pushed.
+            now: Current unix time.
+            window: Maximum age in seconds.
+
+        Returns:
+            The records to push, newest first.
+        """
+        return [
+            item
+            for item in records
+            if int(item["ts"]) > watermark
+            and 0 < now - int(item["ts"]) <= window
+            and not self._is_excluded(str(item.get("title") or ""))
+        ]
+
     def _feed_retry_delays(self) -> list[float]:
         """Parse the retry schedule used after a self-hosted source failure.
 
@@ -1749,11 +1779,7 @@ class ArknightsPlugin(Star):
         # The window is what keeps an entry sitting on the edge of the feed from
         # being announced months late; the watermark keeps a restart from
         # re-sending what already went out.
-        fresh = [
-            item
-            for item in records
-            if int(item["ts"]) > watermark and 0 < now - int(item["ts"]) <= window
-        ]
+        fresh = self._filter_pushable(records, watermark, now, window)
         if newest > watermark:
             await self.store.set_announce_watermark(newest)
         if not fresh:

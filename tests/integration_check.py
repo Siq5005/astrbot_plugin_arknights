@@ -830,6 +830,60 @@ async def main() -> int:
     )
     check("feed_source=official 时不请求自建源", feeder.calls == 0, feeder.calls)
 
+    # ── 排除过滤：命中关键词的条目既不推送，也不推进水位线 ────────────────
+    FILTER_TS = int(time.time())
+
+    def filter_fixture(ident, title, ts):
+        return {
+            "id": ident,
+            "title": title,
+            "author": "明日方舟",
+            "brief": "",
+            "group": "OFFICIAL",
+            "group_cn": "官方",
+            "url": "",
+            "ts": ts,
+            "date_text": "2026-10-12 11:00",
+        }
+
+    filter_records = [
+        filter_fixture("1", "【签到福利】森空岛10月签到福利活动开启！", FILTER_TS - 60),
+        filter_fixture("2", "《明日方舟》EP - 大地之盐", FILTER_TS - 30),
+        filter_fixture("3", "【有奖活动】猜猜我是谁#2全新谜题开启！", FILTER_TS - 20),
+    ]
+
+    filtering = plugin_module.ArknightsPlugin(
+        context=SimpleNamespace(send_message=None),
+        config={"feed_exclude_keywords": "签到福利,有奖活动,模组"},
+    )
+    kept = filtering._filter_pushable(
+        filter_records, watermark=FILTER_TS - 120, now=FILTER_TS, window=86400
+    )
+    check("排除关键词被过滤", [item["id"] for item in kept] == ["2"], kept)
+    check(
+        "未命中关键词的条目不误伤",
+        filtering._is_excluded("《明日方舟》EP - 大地之盐") is False,
+        None,
+    )
+
+    # 关键词留空时必须全部放行，否则用户没法关掉过滤
+    permissive = plugin_module.ArknightsPlugin(
+        context=SimpleNamespace(send_message=None), config={"feed_exclude_keywords": ""}
+    )
+    all_kept = permissive._filter_pushable(
+        filter_records, watermark=FILTER_TS - 120, now=FILTER_TS, window=86400
+    )
+    check("关键词留空时不过滤", len(all_kept) == 3, all_kept)
+
+    # 时间窗口依旧生效：把「现在」推到 48 小时后，三条都过期
+    expired = filtering._filter_pushable(
+        filter_records,
+        watermark=FILTER_TS - 120,
+        now=FILTER_TS + 48 * 3600,
+        window=86400,
+    )
+    check("超出时间窗口的条目不会被推送", expired == [], expired)
+
     # CommandFilter only fires on an exact name or a name plus a space, so the
     # no-space form needs its own alias; both must reach a forced sync.
     check(
