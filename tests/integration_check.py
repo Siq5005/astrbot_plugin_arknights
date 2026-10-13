@@ -1,15 +1,17 @@
 """Integration checks that require the AstrBot framework to be importable.
 
-Run this from the AstrBot root directory (the one containing ``data/plugins``)
-using the interpreter AstrBot itself runs with, so the plugin resolves through
-the exact dotted module path AstrBot uses at runtime::
+Run this with the interpreter AstrBot itself runs with, pointing
+``ASTRBOT_ROOT`` at the AstrBot install (the one containing ``data/plugins``) so
+the framework resolves on the search path::
 
-    cd /path/to/AstrBot
-    ASTRBOT_ROOT=$PWD python /path/to/astrbot_plugin_arknights/tests/integration_check.py
+    ASTRBOT_ROOT=/path/to/AstrBot python /path/to/astrbot_plugin_arknights/tests/integration_check.py
 
-``ASTRBOT_ROOT`` defaults to the current working directory. This exercises the
-real command handlers against stubbed network responses, so it covers command
-wiring, card building and image rendering together without needing an account.
+The plugin itself is always imported from this checkout, whatever the AstrBot
+install happens to symlink into its ``data/plugins`` directory. ``ASTRBOT_ROOT``
+defaults to the current working directory and must contain ``data/plugins``.
+This exercises the real command handlers against stubbed network responses, so
+it covers command wiring, card building and image rendering together without
+needing an account.
 """
 
 from __future__ import annotations
@@ -18,11 +20,14 @@ import asyncio
 import os
 import re
 import sys
+import tempfile
 import time
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
+PLUGIN_NAME = "astrbot_plugin_arknights"
 ASTRBOT_ROOT = Path(os.environ.get("ASTRBOT_ROOT") or Path.cwd()).resolve()
 if not (ASTRBOT_ROOT / "data" / "plugins").is_dir():
     raise SystemExit(
@@ -31,6 +36,22 @@ if not (ASTRBOT_ROOT / "data" / "plugins").is_dir():
     )
 sys.path.insert(0, str(PLUGIN_ROOT))
 sys.path.insert(0, str(ASTRBOT_ROOT))
+
+# `data.plugins.<name>` must resolve to THIS checkout, not to whatever the
+# AstrBot install symlinks there. Without this the script silently tests the
+# primary checkout's HEAD — a run can pass while the code under test is not the
+# code being changed. The bridge directory exists only because an importable
+# package must be named `astrbot_plugin_arknights`, while a worktree of this
+# repo is usually named something else.
+_ASTRBOT_PLUGINS = ASTRBOT_ROOT / "data" / "plugins"
+_BRIDGE = Path(tempfile.mkdtemp(prefix="ark-integration-"))
+(_BRIDGE / PLUGIN_NAME).symlink_to(PLUGIN_ROOT, target_is_directory=True)
+_data_pkg = types.ModuleType("data")
+_data_pkg.__path__ = []
+_plugins_pkg = types.ModuleType("data.plugins")
+_plugins_pkg.__path__ = [str(_BRIDGE), str(_ASTRBOT_PLUGINS)]
+sys.modules["data"] = _data_pkg
+sys.modules["data.plugins"] = _plugins_pkg
 
 import data.plugins.astrbot_plugin_arknights.main as plugin_module  # noqa: E402
 from astrbot.core.star.star_handler import star_handlers_registry  # noqa: E402
@@ -101,7 +122,6 @@ PLAYER = {
 }
 
 PLUGIN_DIR = Path(__file__).resolve().parents[1]
-PLUGIN_NAME = "astrbot_plugin_arknights"
 
 EXPECTED_COMMANDS = {
     "ark帮助",
