@@ -25,32 +25,38 @@ POLL_INTERVAL_SECONDS = 2
 POLL_TIMEOUT_SECONDS = 180
 
 
-def render_qr(text: str, png_path: Path) -> None:
+def render_qr(text: str, image_path: Path) -> None:
     """Render a QR code for the given payload, to a file and to the terminal.
 
     The terminal rendering uses block characters and therefore needs a strictly
-    monospaced font; a chat window or a proportional terminal font will shear it
-    into something unscannable. The PNG is the reliable artifact — the operator
-    downloads it and scans it off the screen.
+    monospaced font; a chat window or a proportional terminal font shears it
+    into something unscannable, so the file is the artifact that matters.
+
+    The SVG factory is deliberate: it is the only ``qrcode`` image backend that
+    needs nothing outside the standard library. ``qrcode.make()`` pulls in
+    Pillow and ``PyPNGImage`` pulls in PyPNG, either of which would add a
+    dependency the service does not otherwise carry.
 
     Args:
         text: Payload to encode, here the ``hypergryph://`` login URL.
-        png_path: Where to write the PNG. Mode 0600, since the payload is a
-            login URL (short lived, but still a credential).
+        image_path: Where to write the image. Mode 0600, since the payload is a
+            login URL — short lived, but still a credential.
     """
     try:
         import qrcode
+        import qrcode.image.svg
     except ImportError:
         print("未安装 qrcode，无法渲染二维码。")
         print("请在能生成二维码的工具里手工编码下面的内容：")
         print(text)
         return
 
-    image = qrcode.make(text)
-    png_path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(png_path)
-    os.chmod(png_path, 0o600)
-    print(f"二维码图片已写入 {png_path}（把它下载到本地打开再扫更可靠）")
+    image = qrcode.make(text, image_factory=qrcode.image.svg.SvgPathImage)
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(image_path)
+    os.chmod(image_path, 0o600)
+    print(f"二维码已写入 {image_path}（打开图片再扫，比看终端可靠）")
+    print(f"图片也扫不出的话，把这串交给任意二维码生成器：\n{text}")
 
     qr = qrcode.QRCode(border=1)
     qr.add_data(text)
@@ -73,8 +79,8 @@ async def main() -> int:
         help="credential file to write",
     )
     parser.add_argument(
-        "--qr-png",
-        default="/opt/arksource/login-qr.png",
+        "--qr-image",
+        default="/opt/arksource/login-qr.svg",
         help="where to write the scannable QR image",
     )
     args = parser.parse_args()
@@ -83,7 +89,7 @@ async def main() -> int:
     try:
         qr = await client.create_qr()
         print("请使用「森空岛」APP 扫描下面的二维码：\n")
-        render_qr(qr["scan_url"], Path(args.qr_png))
+        render_qr(qr["scan_url"], Path(args.qr_image))
         print(f"\nscan_id={qr['scan_id']}\n等待扫码…")
 
         waited = 0
