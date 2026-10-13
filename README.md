@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.4.0-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.4.1-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -360,6 +360,13 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.4.1 (2026-10-13)
+
+- 修复定时任务可能被静默跳过的问题：APScheduler 的 `misfire_grace_time` 默认仅 1 秒，
+  事件循环被渲染占用超过 1 秒时该次执行会被丢弃——公告推送会因此晚一个轮询周期，
+  每日签到甚至可能整天不执行。现在签到给 1 小时宽限，理智与公告轮询各给 5 分钟。
+- 启动日志现在也会报告公告轮询的间隔。
 
 ### 0.4.0 (2026-10-12)
 

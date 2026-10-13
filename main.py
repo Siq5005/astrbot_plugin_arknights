@@ -52,7 +52,7 @@ from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
-PLUGIN_VERSION = "0.4.0"
+PLUGIN_VERSION = "0.4.1"
 
 # Seconds the QR code stays valid, and how often it is polled.
 QR_TIMEOUT = 120
@@ -229,12 +229,15 @@ class ArknightsPlugin(Star):
                 CronTrigger(hour=hour, minute=minute),
                 id="arknights_auto_sign",
                 replace_existing=True,
+                # A stall around 00:05 must not cost the whole day's sign-in.
+                misfire_grace_time=3600,
             )
             self.scheduler.add_job(
                 self._sanity_poll_job,
                 IntervalTrigger(minutes=minutes),
                 id="arknights_sanity_poll",
                 replace_existing=True,
+                misfire_grace_time=300,
             )
             announce_minutes = max(
                 15, int(self.config.get("announce_poll_interval", 30) or 30)
@@ -244,13 +247,17 @@ class ArknightsPlugin(Star):
                 IntervalTrigger(minutes=announce_minutes),
                 id="arknights_announce_poll",
                 replace_existing=True,
+                # Rendering blocks the same event loop for seconds; without this
+                # the poll is skipped and the push slips a whole interval.
+                misfire_grace_time=300,
             )
             self.scheduler.start()
             logger.info(
-                "罗德岛终端定时任务已启动：签到 %02d:%02d，理智轮询每 %d 分钟",
+                "罗德岛终端定时任务已启动：签到 %02d:%02d，理智轮询每 %d 分钟，公告轮询每 %d 分钟",
                 hour,
                 minute,
                 minutes,
+                announce_minutes,
             )
         except Exception as exc:  # noqa: BLE001 - scheduling must not block loading
             logger.error("启动定时任务失败: %s", exc)

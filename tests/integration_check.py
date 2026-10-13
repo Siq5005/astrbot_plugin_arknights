@@ -1071,6 +1071,16 @@ async def main() -> int:
     )
     await plugin.initialize()
     check("scheduler starts with two jobs", plugin.scheduler is not None)
+    # APScheduler defaults misfire_grace_time to one second, so a run delayed by
+    # an event-loop stall is skipped outright — a skipped announce poll means the
+    # push slips a whole interval. Every job must carry a generous grace.
+    jobs = {job.id: job for job in plugin.scheduler.get_jobs()}
+    check("三个定时任务都已注册", len(jobs) == 3, sorted(jobs))
+    check(
+        "每个定时任务都有足够的 misfire 宽限",
+        all((job.misfire_grace_time or 0) >= 300 for job in jobs.values()),
+        {jid: job.misfire_grace_time for jid, job in jobs.items()},
+    )
     await plugin.terminate()
     check("terminate shuts the scheduler down", plugin.scheduler is None)
 
