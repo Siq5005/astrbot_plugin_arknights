@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.3.9-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.4.0-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -98,6 +98,11 @@ playwright install chromium
 | `announce_poll_interval` | int | `30` | 公告订阅轮询间隔（分钟），下限 15 分钟 |
 | `announce_push_cards` | int | `3` | 公告推送附带详情卡的数量；前 N 条渲染为卡片（含配图），其余只给标题，`0` 表示全部只发文字 |
 | `announce_max_age_hours` | int | `24` | 公告推送时间窗口（小时）。只推送发布时间在窗口内的公告 |
+| `feed_source` | string | `selfhosted` | 公告推送数据源。`selfhosted` = 自建森空岛「官方」栏目源（含 PV / EP 视频等官网没有的动态）；`official` = 官网公告源。自建源失败会自动降级到官网源 |
+| `feed_base_url` | string | `https://ark.youyou.ink/api/ark/v1` | 自建源地址，默认无需修改 |
+| `feed_api_key` | string | `（已内置）` | 自建源访问密钥。默认值随插件内置，无需修改 |
+| `feed_exclude_keywords` | string | `签到福利,周记表,每日谜题,猜猜我是谁,创作集锦,版区作品,模组,游戏工具,有奖活动,创作者应援,讨论楼,热议` | 公告推送排除关键词，英文逗号分隔；标题命中任一关键词的条目不推送。留空则不过滤 |
+| `feed_retry_delays` | string | `1,3,5` | 自建源失败后的重试间隔（分钟），英文逗号分隔。按这些间隔依次重试，全部失败才降级到官网源并告警；留空表示失败即降级 |
 | `gacha_cache_ttl` | int | `21600` | 抽卡记录缓存时间（秒）。该时间内直接用本地记录，不请求官网 |
 | `max_bindings` | int | `5` | 单用户最大绑定角色数，`0` 表示不限制 |
 
@@ -355,6 +360,18 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.4.0 (2026-10-12)
+
+- 公告推送默认改用自建的森空岛「官方」栏目源，内容比官网公告更全：新增官方
+  PV / EP、干员展示、服饰、家具、OST 等官网不发布的动态。
+- 视频类动态以封面图 + 标题 + 正文摘要推送，不下载视频文件、不附原文链接。
+- 自建源某次轮询失败时按配置的重试间隔依次重试，全部失败才向订阅者告警并
+  自动降级到官网公告源；降级期间每次轮询都会探测自建源，恢复后自动切回并
+  再次通知。
+- 新增公告推送排除关键词，默认排除签到福利、周记表、每日谜题、创作集锦、
+  模组/工具更新、有奖活动等社区向内容。
+- 自建源可自行部署，见 `server/README.md`。
 
 ### 0.3.9 (2026-10-10)
 
