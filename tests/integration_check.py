@@ -464,8 +464,11 @@ async def main() -> int:
         )
         check(f"拦截器{label}", not quiet, f"yielded {quiet}" if quiet else "silent")
 
+    # This plugin exercises the website source end to end (its `_announce` client
+    # is stubbed below), so pin the source to `official`; `_announce_poll_job`
+    # now routes through `_source_records`, which would otherwise need `_feed`.
     plugin = plugin_module.ArknightsPlugin(
-        context=SimpleNamespace(send_message=None), config={}
+        context=SimpleNamespace(send_message=None), config={"feed_source": "official"}
     )
     plugin.store = Store(Path("/tmp/ak-integration/users.json"))
     plugin.store.path.unlink(missing_ok=True)
@@ -655,6 +658,157 @@ async def main() -> int:
     # leave the store as the following check expects it
     await plugin.unsubscribe_announce(StubEvent("/ark取消订阅公告")).__anext__()
     check("公告订阅可取消", not await plugin.store.list_announce_subs())
+
+    # ── 自建源：正常、重试、降级、恢复 ────────────────────────────────────
+    SELF_TS = int(time.time()) - 60
+
+    def selfhosted(ident, ts, title, kind=1):
+        return {
+            "id": ident,
+            "title": title,
+            "author": "明日方舟",
+            "brief": "",
+            "group": "OFFICIAL",
+            "group_cn": "官方",
+            "url": "",
+            "ts": ts,
+            "date_text": "2026-10-12 11:00",
+            "text": "",
+            "images": [],
+            "image_total": 0,
+            "body_html": "",
+            "kind": kind,
+            "cover": "",
+            "stale": False,
+        }
+
+    SELF_RECORDS = [
+        selfhosted("6377378", SELF_TS, "《明日方舟》「书行山海」特别公益PV")
+    ]
+    SITE_RECORDS = [announcement("9999", SELF_TS, "[活动预告] 新活动即将开启")]
+
+    class FakeFeed:
+        """FeedClient stand-in that fails its first ``fail_times`` calls."""
+
+        def __init__(self, records, fail_times=0, stale=False):
+            self.records = [{**record, "stale": stale} for record in records]
+            self.fail_times = fail_times
+            self.calls = 0
+
+        async def fetch(self):
+            self.calls += 1
+            if self.calls <= self.fail_times:
+                # Must be the class the plugin itself catches: the harness imports
+                # ``core.feed`` on a separate path from the plugin's own
+                # ``.core.feed``, and the two are distinct class objects.
+                raise plugin_module.FeedError("连接超时")
+            return list(self.records)
+
+        async def close(self):
+            return None
+
+    def make_source_plugin(feed, config=None, announce_records=None):
+        """Build a plugin wired to the fake feed and an optional fake website."""
+        built = plugin_module.ArknightsPlugin(
+            context=SimpleNamespace(send_message=capture), config=config or {}
+        )
+        built.store = Store(Path("/tmp/ak-integration/users.json"))
+        built.store.path.unlink(missing_ok=True)
+        built._feed = feed
+        if announce_records is not None:
+
+            async def fake_site():
+                return list(announce_records)
+
+            built._announce.fetch = fake_site
+        return built
+
+    def alert_text():
+        return " ".join(str(getattr(seg, "text", "")) for grp in sent for seg in grp)
+
+    # 1) 自建源正常：用它，不降级
+    sent.clear()
+    feeder = FakeFeed(SELF_RECORDS)
+    plugin = make_source_plugin(
+        feeder, {"feed_source": "selfhosted", "feed_retry_delays": "0"}
+    )
+    records = await plugin._source_records()
+    check("自建源正常时使用自建源", [r["id"] for r in records] == ["6377378"], records)
+    check(
+        "自建源正常时不降级",
+        (await plugin.store.feed_state())["active"] == "",
+        await plugin.store.feed_state(),
+    )
+
+    # 2) 首次失败、重试成功：不降级、不告警
+    sent.clear()
+    feeder = FakeFeed(SELF_RECORDS, fail_times=1)
+    plugin = make_source_plugin(
+        feeder, {"feed_source": "selfhosted", "feed_retry_delays": "0"}
+    )
+    records = await plugin._source_records()
+    check("重试成功后仍用自建源", [r["id"] for r in records] == ["6377378"], records)
+    check(
+        "重试成功不降级",
+        (await plugin.store.feed_state())["active"] == "",
+        await plugin.store.feed_state(),
+    )
+    check("确实发生了一次重试", feeder.calls == 2, feeder.calls)
+    check("重试成功不发告警", sent == [], f"{sent}")
+
+    # 3) 重试全部失败：降级 + 告警 + 回落到官网源
+    sent.clear()
+    feeder = FakeFeed(SELF_RECORDS, fail_times=99)
+    plugin = make_source_plugin(
+        feeder,
+        {"feed_source": "selfhosted", "feed_retry_delays": "0,0"},
+        announce_records=SITE_RECORDS,
+    )
+    await plugin.store.set_announce_sub(
+        "2260442041", "coe:GroupMessage:454206542", True
+    )
+    records = await plugin._source_records()
+    check(
+        "重试全部失败后降级到官网源",
+        (await plugin.store.feed_state())["active"] == "official",
+        await plugin.store.feed_state(),
+    )
+    check("降级后返回官网源记录", [r["id"] for r in records] == ["9999"], records)
+    check("尝试次数 = 首发 1 次 + 重试 2 次", feeder.calls == 3, feeder.calls)
+    check("降级向订阅者发出了告警", "降级" in alert_text(), alert_text()[:200])
+
+    # 4) 已降级时自建源恢复：切回并通知
+    sent.clear()
+    feeder = FakeFeed(SELF_RECORDS)
+    plugin = make_source_plugin(
+        feeder, {"feed_source": "selfhosted", "feed_retry_delays": "0"}
+    )
+    await plugin.store.set_feed_active("official")
+    await plugin.store.set_announce_sub(
+        "2260442041", "coe:GroupMessage:454206542", True
+    )
+    records = await plugin._source_records()
+    check(
+        "恢复后切回自建源",
+        (await plugin.store.feed_state())["active"] == "",
+        await plugin.store.feed_state(),
+    )
+    check("恢复后返回自建源记录", [r["id"] for r in records] == ["6377378"], records)
+    check("恢复发出了通知", "恢复" in alert_text(), alert_text()[:200])
+
+    # 5) 配置为 official 时完全不碰自建源
+    sent.clear()
+    feeder = FakeFeed(SELF_RECORDS)
+    plugin = make_source_plugin(
+        feeder, {"feed_source": "official"}, announce_records=SITE_RECORDS
+    )
+    records = await plugin._source_records()
+    check(
+        "feed_source=official 时直接用官网源",
+        [r["id"] for r in records] == ["9999"],
+        records,
+    )
+    check("feed_source=official 时不请求自建源", feeder.calls == 0, feeder.calls)
 
     # CommandFilter only fires on an exact name or a name plus a space, so the
     # no-space form needs its own alias; both must reach a forced sync.

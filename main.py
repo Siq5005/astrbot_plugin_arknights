@@ -36,6 +36,7 @@ from .core.daily import (
     build_rogue_context,
     build_task_context,
 )
+from .core.feed import DEFAULT_BASE_URL, FeedClient, FeedError
 from .core.gacha import GachaClient, GachaError, analyze, format_record_time
 from .core.gacha_store import GachaStore
 from .core.gamedata import GameData
@@ -213,6 +214,12 @@ class ArknightsPlugin(Star):
 
     async def initialize(self) -> None:
         """Start the automatic sign-in and sanity polling jobs."""
+        # The self-hosted source is preferred; the website source stays as the
+        # fallback and is also what `feed_source: official` selects outright.
+        self._feed = FeedClient(
+            base_url=str(self.config.get("feed_base_url") or DEFAULT_BASE_URL),
+            api_key=str(self.config.get("feed_api_key") or ""),
+        )
         hour, minute = self._parse_sign_time(self.config.get("sign_time", "00:05"))
         minutes = max(10, int(self.config.get("sanity_poll_interval", 20) or 20))
         try:
@@ -287,6 +294,7 @@ class ArknightsPlugin(Star):
         await self._gamedata.close()
         await self._gacha.close()
         await self._announce.close()
+        await self._feed.close()
 
     # ── helpers ───────────────────────────────────────────────────────────
 
@@ -1507,6 +1515,115 @@ class ArknightsPlugin(Star):
         """
         return await self._announce.fetch()
 
+    # ── 数据源选择、失败重试与降级 ────────────────────────────────────────
+
+    def _is_excluded(self, title: str) -> bool:
+        """Report whether a title matches the configured exclusion keywords.
+
+        Args:
+            title: Announcement title.
+
+        Returns:
+            ``True`` when the title contains any configured keyword.
+        """
+        raw = str(self.config.get("feed_exclude_keywords") or "")
+        keywords = [part.strip() for part in raw.split(",") if part.strip()]
+        if not keywords:
+            return False
+        return any(keyword in (title or "") for keyword in keywords)
+
+    def _feed_retry_delays(self) -> list[float]:
+        """Parse the retry schedule used after a self-hosted source failure.
+
+        Returns:
+            Delays in minutes, in order; empty when retries are disabled.
+        """
+        raw = str(self.config.get("feed_retry_delays") or "")
+        delays: list[float] = []
+        for part in raw.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                delays.append(max(0.0, float(part)))
+            except ValueError:
+                continue
+        return delays
+
+    async def _source_records(self) -> list[dict[str, Any]]:
+        """Fetch records from the active source.
+
+        The self-hosted source is preferred. A failed poll is retried on the
+        configured schedule, and only when every retry fails does the plugin
+        degrade to the website source and tell the subscribers. While degraded
+        it re-probes the self-hosted source on each poll and switches back as
+        soon as that source recovers.
+
+        Returns:
+            Records to push, newest first.
+
+        Raises:
+            AnnounceError: When the website source itself cannot be read.
+        """
+        configured = str(self.config.get("feed_source") or "selfhosted")
+        state = await self.store.feed_state()
+
+        if configured == "official":
+            return await self._announce_records()
+
+        if state["active"] == "official":
+            # Degraded: the probe is cheap and the payload is cached upstream, so
+            # it runs on every poll; any failure just keeps serving the website.
+            try:
+                records = await self._feed.fetch()
+            except FeedError:
+                return await self._announce_records()
+            if records and all(item.get("stale") for item in records):
+                return await self._announce_records()
+            await self.store.set_feed_active("")
+            await self._notify_feed_subscribers("自建公告源已恢复，推送切回自建源。")
+            return records
+
+        delays = self._feed_retry_delays()
+        last_error = "未知错误"
+        for attempt in range(len(delays) + 1):
+            try:
+                records = await self._feed.fetch()
+            except FeedError as exc:
+                last_error = str(exc)
+            else:
+                if not (records and all(item.get("stale") for item in records)):
+                    return records
+                last_error = "自建源数据过期"
+
+            if attempt < len(delays):
+                logger.warning(
+                    "[公告轮询] 自建源第 %d 次失败（%s），%.0f 分钟后重试",
+                    attempt + 1,
+                    last_error,
+                    delays[attempt],
+                )
+                await asyncio.sleep(delays[attempt] * 60)
+
+        # Every attempt failed: degrade, and say so exactly once.
+        await self.store.set_feed_active("official")
+        await self._notify_feed_subscribers(
+            f"自建公告源连续 {len(delays) + 1} 次获取失败，已自动降级到官网公告源。\n"
+            f"原因：{last_error}"
+        )
+        return await self._announce_records()
+
+    async def _notify_feed_subscribers(self, text: str) -> None:
+        """Send a source-status notice to every announcement subscriber.
+
+        Args:
+            text: Notice body.
+        """
+        for sub in await self.store.list_announce_subs():
+            umo = str(sub.get("umo") or "")
+            if umo:
+                await self._notify(umo, text)
+
     @filter.command("ark公告")
     async def show_announcements(self, event: AstrMessageEvent):
         """List official announcements, or show one by id."""
@@ -1606,7 +1723,7 @@ class ArknightsPlugin(Star):
         if not subs:
             return
         try:
-            records = await self._announce_records()
+            records = await self._source_records()
         except AnnounceError as exc:
             logger.warning("[公告轮询] 获取失败: %s", exc)
             return
@@ -1648,12 +1765,25 @@ class ArknightsPlugin(Star):
         card_limit = max(0, int(self.config.get("announce_push_cards", 3) or 0))
         cards: list[tuple[dict[str, Any], Path | None]] = []
         for item in fresh[:card_limit]:
-            try:
-                detail = await self._announce.fetch_detail(item["id"])
-            except AnnounceError as exc:
-                logger.warning("[公告轮询] %s 正文获取失败: %s", item["id"], exc)
-                cards.append((item, None))
-                continue
+            # The self-hosted source ships the body with the record, so there is
+            # nothing to fetch; its ids are Skland post ids and would 404 against
+            # the website's detail route.
+            if item.get("body_html") is not None:
+                detail = {
+                    "cid": item["id"],
+                    "url": item.get("url", ""),
+                    "body_html": item["body_html"],
+                    "text": item.get("text", ""),
+                    "images": item.get("images", []),
+                    "image_total": item.get("image_total", 0),
+                }
+            else:
+                try:
+                    detail = await self._announce.fetch_detail(item["id"])
+                except AnnounceError as exc:
+                    logger.warning("[公告轮询] %s 正文获取失败: %s", item["id"], exc)
+                    cards.append((item, None))
+                    continue
             image = await self._render(
                 "announce_detail.html", {"announce": {**item, **detail}}
             )
