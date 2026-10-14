@@ -1151,6 +1151,56 @@ async def main() -> int:
     await watch._health_watch_job()
     check("恢复不重复通知", sent == [], f"{sent}")
 
+    # The other failure mode is the service being unreachable at all: health()
+    # cannot complete and raises FeedError instead of reporting a bad payload.
+    # Reset the state explicitly so nothing above can mask the outcome.
+    sent.clear()
+    watch._health_failures = 0
+    watch._health_alerted = False
+    hc.payload = {"stale": False, "count": 1, "last_success_at": 1, "last_error": ""}
+    hc.raises = True
+
+    # A single failed probe is still just a blip.
+    await watch._health_watch_job()
+    check("看门狗探活失败一次不告警", sent == [], f"{sent}")
+
+    for _ in range(plugin_module.HEALTH_WATCH_FAILURES - 1):
+        await watch._health_watch_job()
+
+    down = " ".join(str(getattr(seg, "text", "")) for grp in sent for seg in grp)
+    check(
+        "看门狗连续探活失败后私聊告警",
+        f"健康检查连续 {plugin_module.HEALTH_WATCH_FAILURES} 次失败" in down,
+        down[:160],
+    )
+    check("探活失败告警带上了 FeedError 消息", "连接超时" in down, down[:160])
+    # FeedError has to be swallowed inside the job rather than escape to the
+    # scheduler; reaching this check proves the call returned, and the counters
+    # prove it took the except branch instead of returning early.
+    check(
+        "探活失败被捕获并计入失败次数",
+        watch._health_failures == plugin_module.HEALTH_WATCH_FAILURES
+        and watch._health_alerted is True
+        and len(sent) == 1,
+        f"failures={watch._health_failures} alerted={watch._health_alerted} sent={len(sent)}",
+    )
+
+    # A clean reading after the outage reports recovery exactly once.
+    sent.clear()
+    hc.raises = False
+    await watch._health_watch_job()
+    back = " ".join(str(getattr(seg, "text", "")) for grp in sent for seg in grp)
+    check("探活恢复后通知一次", "已恢复正常" in back, back[:160])
+    check(
+        "探活恢复后看门狗状态复位",
+        watch._health_failures == 0 and watch._health_alerted is False,
+        f"failures={watch._health_failures} alerted={watch._health_alerted}",
+    )
+
+    sent.clear()
+    await watch._health_watch_job()
+    check("探活恢复不重复通知", sent == [], f"{sent}")
+
     # Empty target disables the watchdog entirely.
     sent.clear()
     quiet = plugin_module.ArknightsPlugin(
