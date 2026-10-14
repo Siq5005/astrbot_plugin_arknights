@@ -77,4 +77,5 @@ curl -s -H "X-API-Key: $ARKSOURCE_API_KEY" https://ark.youyou.ink/api/ark/v1/fee
   是否出现 `用户未登录`；是的话重跑 `scripts/login.py`。
 - `core/skland.py` 或 `core/hypergryph.py` 变更后，用 `cp` 重新覆盖
   `app/skland_client.py` / `app/hypergryph_client.py`，并重启服务。
-- `stale` 长时间为 `true`：看 `journalctl -u arksource -n 50`。
+- `stale` 长时间为 `true`：看 `/var/log/arksource.log`（unit 里配了
+  `StandardOutput=append:`，因为本机的 journald 读不到）。

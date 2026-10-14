@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.4.1-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.4.2-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -360,6 +360,14 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.4.2 (2026-10-13)
+
+- 新增服务端健康看门狗（默认关闭）。配置 `health_watch_umo` 后，插件会每 5 分钟探一次
+  自建源的健康接口，**连续三次异常或服务端缓存过期时私聊告警**，恢复后再通知一次。
+- 盯的是 `last_error` 而不是 `stale`：服务端刷新失败会保留上一份缓存，`stale` 要等
+  一小时才翻，而 `last_error` 在第一次失败时就写上了，能提前约 35–50 分钟发现。
+- `server/README.md` 的排障指引改指 `/var/log/arksource.log`（journald 在该主机读不到）。
 
 ### 0.4.1 (2026-10-13)
 

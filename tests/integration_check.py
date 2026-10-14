@@ -1075,12 +1075,106 @@ async def main() -> int:
     # an event-loop stall is skipped outright — a skipped announce poll means the
     # push slips a whole interval. Every job must carry a generous grace.
     jobs = {job.id: job for job in plugin.scheduler.get_jobs()}
-    check("三个定时任务都已注册", len(jobs) == 3, sorted(jobs))
+    check("四个定时任务都已注册", len(jobs) == 4, sorted(jobs))
     check(
         "每个定时任务都有足够的 misfire 宽限",
         all((job.misfire_grace_time or 0) >= 300 for job in jobs.values()),
         {jid: job.misfire_grace_time for jid, job in jobs.items()},
     )
+
+    # ── 健康看门狗：只在异常时告警，恢复正常时也通知一次 ──────────────
+    sent.clear()
+    watch = plugin_module.ArknightsPlugin(
+        context=SimpleNamespace(send_message=capture),
+        config={
+            "health_watch_umo": "coe:FriendMessage:835515264",
+            "feed_source": "selfhosted",
+        },
+    )
+
+    class FakeHealth:
+        """FeedClient stand-in whose health payload the test controls."""
+
+        def __init__(self):
+            self.payload = {
+                "stale": False,
+                "count": 1,
+                "last_success_at": 1,
+                "last_error": "",
+            }
+            self.raises = False
+
+        async def health(self):
+            if self.raises:
+                raise plugin_module.FeedError("连接超时")
+            return dict(self.payload)
+
+    hc = FakeHealth()
+    watch._feed = hc
+
+    # A single bad observation must not alert — transient blips are normal.
+    hc.payload["last_error"] = "SklandError: 用户未登录"
+    await watch._health_watch_job()
+    check("看门狗单次异常不告警", sent == [], f"{sent}")
+
+    await watch._health_watch_job()
+    check("看门狗两次异常仍不告警", sent == [], f"{sent}")
+
+    await watch._health_watch_job()
+    alert = " ".join(str(getattr(seg, "text", "")) for grp in sent for seg in grp)
+    check("看门狗连续三次异常后私聊告警", "自建公告源异常" in alert, alert[:160])
+    check("告警里带上了上游报错", "用户未登录" in alert, alert[:160])
+
+    # A continuing incident must not re-alert.
+    sent.clear()
+    await watch._health_watch_job()
+    check("同一事故不重复告警", sent == [], f"{sent}")
+
+    # stale alone alerts immediately — the service is provably not refreshing.
+    sent.clear()
+    watch._health_alerted = False
+    watch._health_failures = 0
+    hc.payload = {"stale": True, "count": 0, "last_success_at": 0, "last_error": ""}
+    await watch._health_watch_job()
+    first = " ".join(str(getattr(seg, "text", "")) for grp in sent for seg in grp)
+    check("stale 立刻告警而不必等三次", "自建公告源异常" in first, first[:160])
+    check("stale 告警说明了原因", "缓存已过期" in first, first[:160])
+
+    # Recovery is reported exactly once.
+    sent.clear()
+    hc.payload = {"stale": False, "count": 1, "last_success_at": 1, "last_error": ""}
+    await watch._health_watch_job()
+    ok = " ".join(str(getattr(seg, "text", "")) for grp in sent for seg in grp)
+    check("恢复后通知一次", "已恢复正常" in ok, ok[:160])
+
+    sent.clear()
+    await watch._health_watch_job()
+    check("恢复不重复通知", sent == [], f"{sent}")
+
+    # Empty target disables the watchdog entirely.
+    sent.clear()
+    quiet = plugin_module.ArknightsPlugin(
+        context=SimpleNamespace(send_message=capture),
+        config={"health_watch_umo": "", "feed_source": "selfhosted"},
+    )
+    quiet._feed = hc
+    hc.payload = {"stale": True, "count": 0, "last_success_at": 0, "last_error": "x"}
+    await quiet._health_watch_job()
+    check("未配置目标时看门狗静默", sent == [], f"{sent}")
+
+    # Pinning the website source disables it too — the service is off the path.
+    sent.clear()
+    pinned = plugin_module.ArknightsPlugin(
+        context=SimpleNamespace(send_message=capture),
+        config={
+            "health_watch_umo": "coe:FriendMessage:835515264",
+            "feed_source": "official",
+        },
+    )
+    pinned._feed = hc
+    await pinned._health_watch_job()
+    check("feed_source=official 时看门狗静默", sent == [], f"{sent}")
+
     await plugin.terminate()
     check("terminate shuts the scheduler down", plugin.scheduler is None)
 

@@ -52,7 +52,15 @@ from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
-PLUGIN_VERSION = "0.4.1"
+PLUGIN_VERSION = "0.4.2"
+
+# How often the health watchdog probes the self-hosted service, and how many
+# consecutive bad observations it takes to raise an alert. The service writes
+# `last_error` on the very first failed refresh but only flips `stale` after
+# `stale_minutes`, so watching `last_error` catches a dead credential far sooner;
+# requiring several consecutive hits rides out a transient network blip.
+HEALTH_WATCH_MINUTES = 5
+HEALTH_WATCH_FAILURES = 3
 
 # Seconds the QR code stays valid, and how often it is polled.
 QR_TIMEOUT = 120
@@ -210,6 +218,10 @@ class ArknightsPlugin(Star):
         self._announce = AnnounceClient()
         # user_key -> whether a sanity-full notice has already been sent
         self._sanity_notified: dict[str, bool] = {}
+        # Health-watchdog state: consecutive bad observations, and whether an
+        # alert has already gone out for the current incident.
+        self._health_failures = 0
+        self._health_alerted = False
         self.scheduler: AsyncIOScheduler | None = None
 
     async def initialize(self) -> None:
@@ -249,6 +261,13 @@ class ArknightsPlugin(Star):
                 replace_existing=True,
                 # Rendering blocks the same event loop for seconds; without this
                 # the poll is skipped and the push slips a whole interval.
+                misfire_grace_time=300,
+            )
+            self.scheduler.add_job(
+                self._health_watch_job,
+                IntervalTrigger(minutes=HEALTH_WATCH_MINUTES),
+                id="arknights_health_watch",
+                replace_existing=True,
                 misfire_grace_time=300,
             )
             self.scheduler.start()
@@ -1660,6 +1679,60 @@ class ArknightsPlugin(Star):
             umo = str(sub.get("umo") or "")
             if umo:
                 await self._notify(umo, text)
+
+    async def _health_watch_job(self) -> None:
+        """Warn the operator privately when the self-hosted source goes bad.
+
+        The service keeps serving its last good payload when a refresh fails, so
+        a dead credential is invisible from the feed itself for up to
+        ``stale_minutes``. This probes the service's health endpoint instead and
+        reports to ``health_watch_umo`` once per incident, then confirms recovery
+        once. Empty ``health_watch_umo`` disables it.
+        """
+        umo = str(self.config.get("health_watch_umo") or "").strip()
+        if not umo:
+            return
+        if str(self.config.get("feed_source") or "selfhosted") == "official":
+            # The user pinned the website source; the self-hosted service is not
+            # on the delivery path, so its health is not worth waking them for.
+            return
+
+        try:
+            data = await self._feed.health()
+        except FeedError as exc:
+            self._health_failures += 1
+            if (
+                not self._health_alerted
+                and self._health_failures >= HEALTH_WATCH_FAILURES
+            ):
+                self._health_alerted = True
+                await self._notify(
+                    umo,
+                    f"⚠️ 自建公告源健康检查连续 {self._health_failures} 次失败：{exc}\n"
+                    "公告推送可能已在重试或降级到官网源。",
+                )
+            return
+
+        last_error = str(data.get("last_error") or "")
+        stale = bool(data.get("stale"))
+        if stale or last_error:
+            self._health_failures += 1
+            if not self._health_alerted and (
+                stale or self._health_failures >= HEALTH_WATCH_FAILURES
+            ):
+                self._health_alerted = True
+                await self._notify(
+                    umo,
+                    f"⚠️ 自建公告源异常：{last_error or '服务端缓存已过期，且长时间未能刷新'}\n"
+                    f"（已连续 {self._health_failures} 次检查异常。"
+                    "重跑 /opt/arksource/scripts/login.py 可恢复凭证。）",
+                )
+            return
+
+        self._health_failures = 0
+        if self._health_alerted:
+            self._health_alerted = False
+            await self._notify(umo, "✅ 自建公告源已恢复正常。")
 
     @filter.command("ark公告")
     async def show_announcements(self, event: AstrMessageEvent):

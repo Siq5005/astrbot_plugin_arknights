@@ -354,3 +354,52 @@ async def test_fetch_returns_records_when_stale_but_nonempty():
 
     assert len(records) == 1
     assert records[0]["stale"] is True
+
+
+@pytest.mark.anyio
+async def test_health_returns_the_data_object():
+    def handler(request):
+        assert request.url.path.endswith("/health")
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "data": {
+                    "stale": True,
+                    "count": 3,
+                    "last_success_at": 1,
+                    "last_error": "boom",
+                },
+            },
+        )
+
+    client = _client(handler)
+    try:
+        data = await client.health()
+    finally:
+        await client.close()
+
+    assert data["stale"] is True
+    assert data["last_error"] == "boom"
+
+
+@pytest.mark.anyio
+async def test_health_raises_feed_error_on_transport_failure():
+    def handler(request):
+        raise httpx.ConnectError("down")
+
+    client = _client(handler)
+    with pytest.raises(FeedError):
+        await client.health()
+    await client.close()
+
+
+@pytest.mark.anyio
+async def test_health_raises_feed_error_on_missing_data():
+    def handler(request):
+        return httpx.Response(200, json={"code": 0})
+
+    client = _client(handler)
+    with pytest.raises(FeedError, match="data"):
+        await client.health()
+    await client.close()

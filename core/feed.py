@@ -205,3 +205,36 @@ class FeedClient:
             # silently stop the push, so fail loudly into retry/degrade instead.
             raise FeedError("自建源无数据且未在刷新，凭证可能已失效")
         return records
+
+    async def health(self) -> dict[str, Any]:
+        """Read the aggregator's health payload.
+
+        Returns:
+            The response's ``data`` object: ``stale``, ``count``,
+            ``last_success_at`` and ``last_error``.
+
+        Raises:
+            FeedError: On transport failure, a non-2xx status, a non-zero
+                business code, or a malformed payload.
+        """
+        url = f"{self.base_url}/health"
+        try:
+            response = await self._get_client().get(url)
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            raise FeedError(f"健康检查请求失败: {exc}") from exc
+
+        try:
+            payload = response.json()
+        except (ValueError, httpx.HTTPError) as exc:
+            raise FeedError(
+                f"健康检查响应格式异常: HTTP {response.status_code}"
+            ) from exc
+
+        if response.status_code >= 400:
+            raise FeedError(f"健康检查失败: HTTP {response.status_code}")
+        if not isinstance(payload, dict) or payload.get("code") not in (0, None):
+            raise FeedError("健康检查返回错误")
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise FeedError("健康检查响应缺少 data")
+        return data
