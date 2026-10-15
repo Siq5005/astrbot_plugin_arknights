@@ -343,6 +343,21 @@ async def main() -> int:
         f"缺少 ### {_meta.get('version')} 章节",
     )
 
+    # The dashboard reads a root-level changelog file, so the same version
+    # headings must exist there too; otherwise one of the two drifts on the
+    # next release and the dashboard shows a stale or empty history.
+    _changelog_path = PLUGIN_DIR / "CHANGELOG.md"
+    check("根目录有 CHANGELOG.md", _changelog_path.is_file(), str(_changelog_path))
+    if _changelog_path.is_file():
+        _cl_text = _changelog_path.read_text(encoding="utf-8")
+        _cl_headings = re.findall(r"^###\s+(\d+\.\d+\.\d+)", _cl_text, re.M)
+        check("CHANGELOG.md 至少有一个版本标题", bool(_cl_headings), _cl_headings[:3])
+        check(
+            "CHANGELOG.md 最新版本与插件版本一致",
+            bool(_cl_headings) and _cl_headings[0] == str(plugin_module.PLUGIN_VERSION),
+            f"changelog={_cl_headings[:1]} plugin={plugin_module.PLUGIN_VERSION!r}",
+        )
+
     # The author is declared twice — metadata.yaml for the market and @register
     # for the runtime — and they had drifted apart once already.
     from astrbot.core.star.star import star_map as _star_map

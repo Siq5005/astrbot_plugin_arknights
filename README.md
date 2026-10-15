@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.4.2-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.4.3-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -360,6 +360,10 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.4.3 (2026-10-14)
+
+- ✨ **新增根目录 `CHANGELOG.md`**（[#3](https://github.com/Siq5005/astrbot_plugin_arknights/issues/3)）：AstrBot 的「更新日志」弹窗只读插件根目录下的 `CHANGELOG.md`（依次尝试 `CHANGELOG.md` / `changelog.md` / `CHANGELOG` / `changelog`），此前本插件只有 README 里的更新日志章节，仪表盘里因此是空的。现在两个文件同源，集成检查会校验两边的最新版本号一致，防止发版时只改一边
 
 ### 0.4.2 (2026-10-13)
 
