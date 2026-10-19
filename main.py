@@ -431,13 +431,16 @@ class ArknightsPlugin(Star):
         if mention:
             chain.append(At(qq=mention))
         chain.append(Plain(text))
-        if image is not None:
-            chain.append(
-                Image.fromURL(image)
-                if isinstance(image, str)
-                else Image.fromFileSystem(str(image))
-            )
         try:
+            if image is not None:
+                try:
+                    chain.append(
+                        Image.fromURL(image)
+                        if isinstance(image, str)
+                        else Image.fromFileSystem(str(image))
+                    )
+                except Exception as exc:  # noqa: BLE001 - drop the image, keep the text
+                    logger.warning("图片构造失败，仅发送文本 (%s): %s", umo, exc)
             await self.context.send_message(umo, MessageChain(chain))
         except Exception as exc:  # noqa: BLE001 - never let delivery break a job
             logger.warning("发送消息失败 (%s): %s", umo, exc)
@@ -1926,9 +1929,12 @@ class ArknightsPlugin(Star):
                     # The card was too tall to be usable; the announcement is
                     # image-driven, so deliver the artwork itself.
                     urls = [str(u) for u in item["images"][:_MAX_FALLBACK_IMAGES]]
-                    await self._notify(
-                        umo, header + f"\n（共 {len(urls)} 张图）", urls[0]
-                    )
+                    total = len(item["images"])
+                    caption = header + f"\n（共 {total} 张，先发 {len(urls)} 张"
+                    if total > len(urls):
+                        caption += f"，其余发送 `ark公告 {item['id']}` 查看"
+                    caption += "）"
+                    await self._notify(umo, caption, urls[0])
                     for url in urls[1:]:
                         await self._notify(umo, "", url)
                     continue
