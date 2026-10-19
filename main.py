@@ -1682,6 +1682,34 @@ class ArknightsPlugin(Star):
         )
         return await self._announce_records()
 
+    async def _list_for_command(self) -> list[dict[str, Any]]:
+        """List announcements for an interactive command.
+
+        Unlike the push job this never retries with delays — a user waiting on a
+        command must not be blocked for minutes — and it reads the same source
+        the pushes use, so the ids it matches are the ids the pushes announce.
+
+        Returns:
+            Records, newest first.
+
+        Raises:
+            FeedError: When the self-hosted source is unavailable.
+            AnnounceError: When the website source cannot be read.
+        """
+        configured = str(self.config.get("feed_source") or "selfhosted")
+        if configured == "official":
+            return await self._announce_records()
+        state = await self.store.feed_state()
+        if state["active"] == "official":
+            return await self._announce_records()
+        try:
+            records = await self._feed.fetch()
+        except FeedError:
+            return await self._announce_records()
+        if records and all(item.get("stale") for item in records):
+            return await self._announce_records()
+        return records
+
     async def _notify_feed_subscribers(self, text: str) -> None:
         """Send a source-status notice to every announcement subscriber.
 
@@ -1752,8 +1780,8 @@ class ArknightsPlugin(Star):
         """List official announcements, or show one by id."""
         args = self._args(event)
         try:
-            records = await self._announce_records()
-        except AnnounceError as exc:
+            records = await self._list_for_command()
+        except (AnnounceError, FeedError) as exc:
             yield event.plain_result(f"公告获取失败：{exc}")
             return
         if not records:

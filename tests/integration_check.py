@@ -761,50 +761,6 @@ async def main() -> int:
     await poll_with(artwork_record("6389249", 1), fail_once_then_cover)
     check("单图公告不触发首图重渲染", len(rendered) == 1, f"{len(rendered)} calls")
 
-    # ── ark公告 <编号>：自建源记录不走官网详情接口 ──
-    detail_calls: list[str] = []
-
-    async def recording_fetch_detail(cid):
-        detail_calls.append(cid)
-        return {
-            "cid": cid,
-            "url": f"https://ak.hypergryph.com/news/{cid}",
-            "body_html": "<p>官网正文</p>",
-            "text": "官网正文",
-            "images": ["https://example.invalid/site.jpg"],
-            "image_total": 1,
-        }
-
-    cmd_plugin = plugin_module.ArknightsPlugin(
-        context=SimpleNamespace(send_message=capture),
-        config={"feed_source": "official"},
-    )
-    cmd_plugin.store = Store(Path("/tmp/ak-integration/users.json"))
-    cmd_plugin.store.path.unlink(missing_ok=True)
-    cmd_plugin._renderer = renderer
-    cmd_plugin._announce.fetch_detail = recording_fetch_detail
-
-    async def selfhosted_list():
-        return [artwork_record("6389248", 1)]
-
-    cmd_plugin._announce.fetch = selfhosted_list
-
-    cmd_results = await drive(
-        cmd_plugin.show_announcements(StubEvent("/ark公告 6389248"))
-    )
-    check(
-        "自建源编号查详情不调用官网 fetch_detail",
-        detail_calls == [],
-        f"{detail_calls}",
-    )
-    check(
-        "自建源编号查详情渲染出卡片",
-        bool(cmd_results)
-        and cmd_results[0][0] == "chain"
-        and Path(cmd_results[0][1][0].path).is_file(),
-        f"{[result[0] for result in cmd_results]}",
-    )
-
     # ── 自建源：正常、重试、降级、恢复 ────────────────────────────────────
     SELF_TS = int(time.time()) - 60
 
@@ -868,6 +824,74 @@ async def main() -> int:
 
             built._announce.fetch = fake_site
         return built
+
+    # ── ark公告 <编号>：自建源记录不走官网详情接口 ──
+    detail_calls: list[str] = []
+
+    async def recording_fetch_detail(cid):
+        detail_calls.append(cid)
+        return {
+            "cid": cid,
+            "url": f"https://ak.hypergryph.com/news/{cid}",
+            "body_html": "<p>官网正文</p>",
+            "text": "官网正文",
+            "images": ["https://example.invalid/site.jpg"],
+            "image_total": 1,
+        }
+
+    # The command lists through `_list_for_command`, which reads `_feed` — the
+    # self-hosted client — when `feed_source` is selfhosted. That is the same
+    # source the pushes announce, so the id the caption tells users to run
+    # resolves here without touching the website detail route.
+    cmd_plugin = make_source_plugin(
+        FakeFeed([artwork_record("6389248", 1)]),
+        {"feed_source": "selfhosted"},
+    )
+    cmd_plugin._renderer = renderer
+    cmd_plugin._announce.fetch_detail = recording_fetch_detail
+
+    cmd_results = await drive(
+        cmd_plugin.show_announcements(StubEvent("/ark公告 6389248"))
+    )
+    check(
+        "自建源编号查详情不调用官网 fetch_detail",
+        detail_calls == [],
+        f"{detail_calls}",
+    )
+    check(
+        "自建源编号查详情渲染出卡片",
+        bool(cmd_results)
+        and cmd_results[0][0] == "chain"
+        and Path(cmd_results[0][1][0].path).is_file(),
+        f"{[result[0] for result in cmd_results]}",
+    )
+
+    # `feed_source: official` must pin the command to the website list, never
+    # the self-hosted feed, so the fallback the pushes rely on still resolves
+    # the ids the pushes announce.
+    site_feeder = FakeFeed([artwork_record("6389248", 1)])
+    site_plugin = make_source_plugin(
+        site_feeder,
+        {"feed_source": "official"},
+        announce_records=[announcement("7367", recent, "[活动预告] 新活动即将开启")],
+    )
+    site_plugin._renderer = renderer
+    site_plugin._announce.fetch_detail = recording_fetch_detail
+    site_results = await drive(
+        site_plugin.show_announcements(StubEvent("/ark公告 7367"))
+    )
+    check(
+        "feed_source=official 时命令走官网列表",
+        bool(site_results)
+        and site_results[0][0] == "chain"
+        and Path(site_results[0][1][0].path).is_file(),
+        f"{[result[0] for result in site_results]}",
+    )
+    check(
+        "feed_source=official 时命令不请求自建源",
+        site_feeder.calls == 0,
+        site_feeder.calls,
+    )
 
     def alert_text():
         return " ".join(str(getattr(seg, "text", "")) for grp in sent for seg in grp)
