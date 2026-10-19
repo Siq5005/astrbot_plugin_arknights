@@ -694,6 +694,117 @@ async def main() -> int:
     await plugin.unsubscribe_announce(StubEvent("/ark取消订阅公告")).__anext__()
     check("公告订阅可取消", not await plugin.store.list_announce_subs())
 
+    # ── 超长公告：整卡渲染失败时只保留首图重渲染一次 ──
+    sent.clear()
+
+    def artwork_record(ident, image_count):
+        images = [
+            f"https://example.invalid/{ident}-{i}.jpg" for i in range(image_count)
+        ]
+        return {
+            "id": ident,
+            "title": "「朝陇山」余量上架",
+            "author": "明日方舟",
+            "brief": "",
+            "group": "OFFICIAL",
+            "group_cn": "官方",
+            "url": "",
+            "ts": int(time.time()) - 60,
+            "date_text": "2026-10-19 12:00",
+            "text": "第一段正文",
+            "images": images,
+            "image_total": image_count,
+            "body_html": plugin_module._body_html("第一段正文", images),
+        }
+
+    rendered: list[dict] = []
+
+    async def fail_once_then_cover(template, data):
+        # The first render pretends the full card is too tall to deliver; the
+        # retry must be a cover-only rebuild of body_html.
+        rendered.append(data)
+        return Path("/tmp/ark-integration/cover.png") if len(rendered) == 2 else None
+
+    async def poll_with(record, render):
+        cover_plugin = plugin_module.ArknightsPlugin(
+            context=SimpleNamespace(send_message=capture),
+            config={"feed_source": "official"},
+        )
+        cover_plugin.store = Store(Path("/tmp/ak-integration/users.json"))
+        cover_plugin.store.path.unlink(missing_ok=True)
+        await cover_plugin.store.set_announce_sub(
+            "2260442041", "coe:GroupMessage:454206542", True
+        )
+        await cover_plugin.store.set_announce_watermark(int(time.time()) - 7200)
+
+        async def fake_feed():
+            return [record]
+
+        cover_plugin._announce.fetch = fake_feed
+        cover_plugin._render = render
+        await cover_plugin._announce_poll_job()
+
+    rendered.clear()
+    await poll_with(artwork_record("6389248", 9), fail_once_then_cover)
+    check(
+        "超长公告整卡渲染失败后重渲染一次", len(rendered) == 2, f"{len(rendered)} calls"
+    )
+    check(
+        "重渲染的 body_html 恰好保留 1 张图",
+        len(rendered) == 2 and rendered[1]["announce"]["body_html"].count("<img") == 1,
+        rendered[1]["announce"]["body_html"] if len(rendered) == 2 else "no retry",
+    )
+
+    # A single image needs no retry: the first failure falls through to the
+    # artwork fallback instead of rebuilding an identical one-image card.
+    rendered.clear()
+    await poll_with(artwork_record("6389249", 1), fail_once_then_cover)
+    check("单图公告不触发首图重渲染", len(rendered) == 1, f"{len(rendered)} calls")
+
+    # ── ark公告 <编号>：自建源记录不走官网详情接口 ──
+    detail_calls: list[str] = []
+
+    async def recording_fetch_detail(cid):
+        detail_calls.append(cid)
+        return {
+            "cid": cid,
+            "url": f"https://ak.hypergryph.com/news/{cid}",
+            "body_html": "<p>官网正文</p>",
+            "text": "官网正文",
+            "images": ["https://example.invalid/site.jpg"],
+            "image_total": 1,
+        }
+
+    cmd_plugin = plugin_module.ArknightsPlugin(
+        context=SimpleNamespace(send_message=capture),
+        config={"feed_source": "official"},
+    )
+    cmd_plugin.store = Store(Path("/tmp/ak-integration/users.json"))
+    cmd_plugin.store.path.unlink(missing_ok=True)
+    cmd_plugin._renderer = renderer
+    cmd_plugin._announce.fetch_detail = recording_fetch_detail
+
+    async def selfhosted_list():
+        return [artwork_record("6389248", 1)]
+
+    cmd_plugin._announce.fetch = selfhosted_list
+
+    cmd_results = await drive(
+        cmd_plugin.show_announcements(StubEvent("/ark公告 6389248"))
+    )
+    check(
+        "自建源编号查详情不调用官网 fetch_detail",
+        detail_calls == [],
+        f"{detail_calls}",
+    )
+    check(
+        "自建源编号查详情渲染出卡片",
+        bool(cmd_results)
+        and cmd_results[0][0] == "chain"
+        and Path(cmd_results[0][1][0].path).is_file(),
+        f"{[result[0] for result in cmd_results]}",
+    )
+
     # ── 自建源：正常、重试、降级、恢复 ────────────────────────────────────
     SELF_TS = int(time.time()) - 60
 

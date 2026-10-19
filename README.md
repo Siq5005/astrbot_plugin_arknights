@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.4.5-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.4.6-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -360,6 +360,11 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.4.6 (2026-10-19)
+
+- ✨ **超长公告不再刷屏**：配图很多、整卡渲染不出来的公告（如「〓朝陇山 余量上架〓」9 张长图），现在只把**首图**放进卡片并注明总数与查看方式，一次推送从 7 条消息回到 1 条；整卡连首图都放不下时才退回转发原图
+- 🐛 **修复 `ark公告 <编号>` 查不到自建源公告**：命令原先无条件调用官网详情接口，而自建源的编号是森空岛文章 id（7 位），官网只认自己的 4 位 cid，必然 404。现在自建源记录直接用自身的正文与配图，且详情卡渲染不出时会把原图发给提问者
 
 ### 0.4.5 (2026-10-19)
 

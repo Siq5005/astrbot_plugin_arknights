@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import html as html_module
 import io
 import random
 import re
@@ -36,7 +37,7 @@ from .core.daily import (
     build_rogue_context,
     build_task_context,
 )
-from .core.feed import DEFAULT_BASE_URL, FeedClient, FeedError
+from .core.feed import DEFAULT_BASE_URL, FeedClient, FeedError, _body_html
 from .core.gacha import GachaClient, GachaError, analyze, format_record_time
 from .core.gacha_store import GachaStore
 from .core.gamedata import GameData
@@ -52,7 +53,7 @@ from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
-PLUGIN_VERSION = "0.4.5"
+PLUGIN_VERSION = "0.4.6"
 
 # How often the health watchdog probes the self-hosted service, and how many
 # consecutive bad observations it takes to raise an alert. The service writes
@@ -1765,15 +1766,33 @@ class ArknightsPlugin(Star):
             if target is None:
                 yield event.plain_result(f"没有找到编号为 {wanted} 的公告。")
                 return
-            try:
-                detail = await self._announce.fetch_detail(target["id"])
-            except AnnounceError as exc:
-                yield event.plain_result(f"公告正文获取失败：{exc}")
-                return
+            if target.get("body_html") is not None:
+                # Self-hosted ids are Skland post ids; the website detail route
+                # only knows its own numeric cids and would 404.
+                detail = {
+                    "cid": target["id"],
+                    "url": target.get("url", ""),
+                    "body_html": target["body_html"],
+                    "text": target.get("text", ""),
+                    "images": target.get("images", []),
+                    "image_total": target.get("image_total", 0),
+                }
+            else:
+                try:
+                    detail = await self._announce.fetch_detail(target["id"])
+                except AnnounceError as exc:
+                    yield event.plain_result(f"公告正文获取失败：{exc}")
+                    return
             context = {**target, **detail}
             image = await self._render("announce_detail.html", {"announce": context})
             if image is not None:
                 yield event.chain_result([Image.fromFileSystem(str(image))])
+                return
+            urls = [str(u) for u in (detail.get("images") or [])[:_MAX_FALLBACK_IMAGES]]
+            if urls:
+                yield event.chain_result([Image.fromURL(urls[0])])
+                for url in urls[1:]:
+                    yield event.chain_result([Image.fromURL(url)])
                 return
             # text fallback keeps the announcement readable without a browser
             yield event.plain_result(
@@ -1905,6 +1924,25 @@ class ArknightsPlugin(Star):
             image = await self._render(
                 "announce_detail.html", {"announce": {**item, **detail}}
             )
+            if image is None and len(detail.get("images") or []) > 1:
+                # The full card is too tall to deliver. Keep the cover and point
+                # at the command, which can hand over the rest on request.
+                total = len(detail["images"])
+                note = f"（共 {total} 张图，其余发送 `ark公告 {item['id']}` 查看）"
+                image = await self._render(
+                    "announce_detail.html",
+                    {
+                        "announce": {
+                            **item,
+                            **detail,
+                            "body_html": _body_html(
+                                str(detail.get("text") or ""), detail["images"][:1]
+                            )
+                            + f"<p>{html_module.escape(note)}</p>",
+                            "image_total": total,
+                        }
+                    },
+                )
             cards.append((item, image))
 
         text = "官方新公告\n\n" + "\n\n".join(
