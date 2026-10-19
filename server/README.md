@@ -30,7 +30,7 @@ ARKSOURCE_API_KEY=$KEY
 ARKSOURCE_HOST=127.0.0.1
 ARKSOURCE_PORT=8788
 ARKSOURCE_CREDENTIAL_FILE=/opt/arksource/credentials.json
-ARKSOURCE_POLL_INTERVAL=600
+ARKSOURCE_POLL_INTERVAL=1800
 ARKSOURCE_WINDOW_HOURS=72
 ARKSOURCE_STALE_MINUTES=60
 EOF
@@ -79,3 +79,5 @@ curl -s -H "X-API-Key: $ARKSOURCE_API_KEY" https://ark.youyou.ink/api/ark/v1/fee
   `app/skland_client.py` / `app/hypergryph_client.py`，并重启服务。
 - `stale` 长时间为 `true`：看 `/var/log/arksource.log`（unit 里配了
   `StandardOutput=append:`，因为本机的 journald 读不到）。
+- 森空岛会限流：日志里出现 `服务器开小差` 时先降低轮询频率（`ARKSOURCE_POLL_INTERVAL`
+  调大）再排查，不要在报错时连续重试。

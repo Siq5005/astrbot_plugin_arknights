@@ -5,7 +5,7 @@ import time
 import pytest
 from app.details import DetailStore
 from app.feed import (
-    _MAX_DETAIL_FETCHES,
+    PAGE_SIZE,
     FeedError,
     document_to_text,
     fetch_official,
@@ -154,7 +154,7 @@ class _FakeSkland:
 
 
 @pytest.mark.anyio
-async def test_fetch_official_never_exceeds_page_size_ten():
+async def test_fetch_official_requests_five_items():
     fake = _FakeSkland(
         [
             {"code": 0, "data": {"list": [], "hasMore": False, "pageToken": ""}},
@@ -163,7 +163,7 @@ async def test_fetch_official_never_exceeds_page_size_ten():
 
     await fetch_official(fake, "tok")
 
-    assert "pageSize=10" in fake.urls[0]
+    assert "pageSize=5" in fake.urls[0]
 
 
 @pytest.mark.anyio
@@ -175,59 +175,29 @@ async def test_fetch_official_raises_on_business_error():
 
 
 @pytest.mark.anyio
-async def test_fetch_official_follows_page_token_dedupes_and_orders_newest_first():
+async def test_fetch_official_makes_exactly_one_request():
     now = int(time.time())
-    oldest_id = "page-one-oldest"
-    duplicate_id = "repeated-across-pages"
-    newest_id = "page-two-newest"
     fake = _FakeSkland(
         [
             {
                 "code": 0,
                 "data": {
                     "list": [
-                        {
-                            "item": {
-                                "id": oldest_id,
-                                "title": "first page, older",
-                                "viewKind": 1,
-                                "publishedAtTs": now - 600,
-                            }
-                        },
-                        {
-                            "item": {
-                                "id": duplicate_id,
-                                "title": "first page, repeated later",
-                                "viewKind": 1,
-                                "publishedAtTs": now - 120,
-                            }
-                        },
+                        _list_row("a", "alpha", now - 60),
+                        _list_row("b", "beta", now - 120),
+                        _list_row("c", "gamma", now - 180),
                     ],
                     "hasMore": True,
-                    "pageToken": "page-2-token",
+                    "pageToken": "next-page-token",
                 },
             },
+            # Trap for a paging regression: this second page must never be
+            # requested. If paging is reintroduced, the fetcher follows
+            # hasMore/pageToken and this test fails on the URL count below.
             {
                 "code": 0,
                 "data": {
-                    "list": [
-                        {
-                            "item": {
-                                "id": newest_id,
-                                "title": "second page, newest",
-                                "viewKind": 1,
-                                "publishedAtTs": now - 60,
-                            }
-                        },
-                        {
-                            "item": {
-                                "id": duplicate_id,
-                                "title": "second page, repeated",
-                                "viewKind": 1,
-                                "publishedAtTs": now - 120,
-                            }
-                        },
-                    ],
+                    "list": [_list_row("d", "delta", now - 240)],
                     "hasMore": False,
                     "pageToken": "",
                 },
@@ -237,22 +207,9 @@ async def test_fetch_official_follows_page_token_dedupes_and_orders_newest_first
 
     records = await fetch_official(fake, "tok", now=now)
 
-    # One upstream request per page served.
-    assert len(fake.urls) == 2
-    # The second request carries the token the first page returned.
+    assert len(fake.urls) == 1
     assert "pageToken" not in fake.urls[0]
-    assert "pageToken=page-2-token" in fake.urls[1]
-    # Newest first, regardless of the order the pages arrived in.
-    assert [record["id"] for record in records] == [
-        newest_id,
-        duplicate_id,
-        oldest_id,
-    ]
-    assert [record["published_at"] for record in records] == sorted(
-        (record["published_at"] for record in records), reverse=True
-    )
-    # An id repeated across pages is emitted once.
-    assert [record["id"] for record in records].count(duplicate_id) == 1
+    assert [record["id"] for record in records] == ["a", "b", "c"]
 
 
 def _detail_envelope(text):
@@ -341,10 +298,10 @@ async def test_fetch_official_survives_a_failing_detail(tmp_path):
 
 
 @pytest.mark.anyio
-async def test_fetch_official_caps_detail_fetches_per_refresh(tmp_path):
+async def test_fetch_official_enriches_every_item_on_the_single_page(tmp_path):
     store = DetailStore(tmp_path / "state.json")
     now = int(time.time())
-    rows = [_list_row(str(i), f"t{i}", now - i) for i in range(_MAX_DETAIL_FETCHES + 2)]
+    rows = [_list_row(str(i), f"t{i}", now - i) for i in range(PAGE_SIZE)]
     fake = _FakeSkland(
         [_list_page(rows)],
         details={str(i): _detail_envelope(f"正文{i}") for i in range(len(rows))},
@@ -352,5 +309,5 @@ async def test_fetch_official_caps_detail_fetches_per_refresh(tmp_path):
 
     records = await fetch_official(fake, "tok", now=now, details=store)
 
-    assert len(fake.detail_urls) == _MAX_DETAIL_FETCHES
-    assert len([r for r in records if r["text"]]) == _MAX_DETAIL_FETCHES
+    assert len(fake.detail_urls) == PAGE_SIZE
+    assert len([r for r in records if r["text"]]) == PAGE_SIZE

@@ -5,9 +5,9 @@ signs against. The official column is ``gameId=1`` (Arknights) plus
 ``cateId=1`` (the platform's own "官方" category, whose ``kind`` is 100/Admin),
 sorted newest first with ``sortType=2``.
 
-Two hard limits shape this module: ``pageSize`` may not exceed 10 (anything
-larger is rejected as 参数错误), and paging is token based via ``pageToken``
-alongside a ``hasMore`` flag.
+Only the first page is read, capped at ``pageSize=5``. The upstream throttles
+under sustained load, so paging the list would multiply requests without
+adding any of the newest five items the feed actually serves.
 """
 
 from __future__ import annotations
@@ -22,20 +22,14 @@ logger = logging.getLogger(__name__)
 ZONAI_BASE = "https://zonai.skland.com"
 OFFICIAL_GAME_ID = 1
 OFFICIAL_CATE_ID = 1
-PAGE_SIZE = 10
+PAGE_SIZE = 5
 FEED_PATH = "/web/v2/home/index?gameId={game}&cateId={cate}&pageSize={size}&sortType=2"
 ARTICLE_URL_TEMPLATE = "https://www.skland.com/article?id={id}"
 
-# Politeness delay between pages; the endpoint validates parameters strictly and
-# a burst of ten requests is unnecessary.
-_PAGE_DELAY_SECONDS = 0.5
-# Hard stop so a feed that never reports hasMore=false cannot loop forever.
-_MAX_PAGES = 40
-
 # Detail requests are one per item, so they are paced and capped independently of
-# the list paging. The 72-hour window can hold dozens of items on a cold start;
-# the cap lets each refresh make bounded progress while the cache makes it
-# durable across refreshes.
+# the single list request. The cap guards against the upstream ever returning
+# more than ``pageSize`` rows, keeping each refresh bounded while the cache makes
+# progress durable across refreshes.
 _DETAIL_DELAY_SECONDS = 0.5
 _MAX_DETAIL_FETCHES = 10
 
@@ -186,10 +180,14 @@ async def fetch_official(
 ) -> list[dict[str, Any]]:
     """Read the Arknights official column, newest first.
 
+    Only the first page is fetched, so at most ``PAGE_SIZE`` items are kept:
+    the upstream throttles under sustained load, and paging is both wasteful
+    and unnecessary for the newest few posts this feed serves.
+
     Args:
         client: A signed ``SklandClient`` instance.
         user_token: Long-lived Hypergryph passport token.
-        window_hours: Stop paging once items fall outside this age window.
+        window_hours: Skip items older than this many hours.
         now: Unix seconds to compare against; defaults to the system clock.
         details: Optional ``DetailStore``; when provided, empty item bodies are
             filled from the cache or fetched once and remembered.
@@ -198,7 +196,7 @@ async def fetch_official(
         Normalised records, newest first.
 
     Raises:
-        FeedError: When the feed cannot be read or paged.
+        FeedError: When the feed cannot be read.
     """
     did = await client.get_device_id()
     authorization = await client.get_authorization(user_token)
@@ -209,57 +207,43 @@ async def fetch_official(
 
     records: list[dict[str, Any]] = []
     raw_by_id: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
-    page_token: str | None = None
     seen: set[str] = set()
 
-    for page in range(_MAX_PAGES):
-        path = FEED_PATH.format(
-            game=OFFICIAL_GAME_ID, cate=OFFICIAL_CATE_ID, size=PAGE_SIZE
-        )
-        if page_token:
-            path = f"{path}&pageToken={page_token}"
-        url = ZONAI_BASE + path
-        headers = client._signed_headers(url, "GET", None, cred, did)
-        try:
-            payload = await client._request("GET", url, headers=headers)
-        except Exception as exc:  # noqa: BLE001 - surfaced as FeedError
-            raise FeedError(f"森空岛接口请求失败: {exc}") from exc
+    path = FEED_PATH.format(
+        game=OFFICIAL_GAME_ID, cate=OFFICIAL_CATE_ID, size=PAGE_SIZE
+    )
+    url = ZONAI_BASE + path
+    headers = client._signed_headers(url, "GET", None, cred, did)
+    try:
+        payload = await client._request("GET", url, headers=headers)
+    except Exception as exc:  # noqa: BLE001 - surfaced as FeedError
+        raise FeedError(f"森空岛接口请求失败: {exc}") from exc
 
-        if not isinstance(payload, dict) or payload.get("code") not in (0, None):
-            message = ""
-            if isinstance(payload, dict):
-                message = str(payload.get("message") or "")
-            raise FeedError(f"森空岛接口返回异常: {message or payload}")
+    if not isinstance(payload, dict) or payload.get("code") not in (0, None):
+        message = ""
+        if isinstance(payload, dict):
+            message = str(payload.get("message") or "")
+        raise FeedError(f"森空岛接口返回异常: {message or payload}")
 
-        data = payload.get("data")
-        if not isinstance(data, dict):
-            raise FeedError("森空岛接口响应缺少 data")
-        rows = data.get("list") or []
-        if not rows:
-            break
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise FeedError("森空岛接口响应缺少 data")
+    rows = data.get("list") or []
 
-        oldest = reference
-        for row in rows:
-            raw = row.get("item") if isinstance(row, dict) else None
-            if not isinstance(raw, dict):
-                continue
-            item_id = str(raw.get("id") or "")
-            if not item_id or item_id in seen:
-                continue
-            seen.add(item_id)
-            row_tags = row.get("tags") or []
-            record = normalize(raw, tags=row_tags)
-            oldest = min(oldest, record["published_at"] or reference)
-            if record["published_at"] and record["published_at"] < cutoff:
-                continue
-            records.append(record)
-            raw_by_id[item_id] = (raw, row_tags)
-
-        page_token = data.get("pageToken")
-        if not data.get("hasMore") or not page_token or oldest < cutoff:
-            break
-        if page < _MAX_PAGES - 1:
-            await asyncio.sleep(_PAGE_DELAY_SECONDS)
+    for row in rows:
+        raw = row.get("item") if isinstance(row, dict) else None
+        if not isinstance(raw, dict):
+            continue
+        item_id = str(raw.get("id") or "")
+        if not item_id or item_id in seen:
+            continue
+        seen.add(item_id)
+        row_tags = row.get("tags") or []
+        record = normalize(raw, tags=row_tags)
+        if record["published_at"] and record["published_at"] < cutoff:
+            continue
+        records.append(record)
+        raw_by_id[item_id] = (raw, row_tags)
 
     records.sort(key=lambda entry: (entry["published_at"], entry["id"]), reverse=True)
 
