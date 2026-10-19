@@ -47,6 +47,25 @@ CARD_THEMES: dict[str, str] = {
 DEVICE_SCALE_FACTOR = 2.0
 MAX_TEXTURE_PX = 16384
 
+# Chromium refuses to capture beyond 65535px and silently writes an empty file
+# instead, which the sender then uploads as a broken image. Keep a margin.
+MAX_CAPTURE_PX = 60000
+
+
+def _capture_is_usable(path: Path) -> bool:
+    """Check that a screenshot actually produced a decodable-sized file.
+
+    Args:
+        path: File the screenshot was written to.
+
+    Returns:
+        ``True`` when the file exists and is non-empty.
+    """
+    try:
+        return path.is_file() and path.stat().st_size > 0
+    except OSError:
+        return False
+
 
 class Renderer:
     """Render Jinja2 templates to JPEG cards."""
@@ -228,6 +247,19 @@ class Renderer:
                     " img.onload = resolve; img.onerror = resolve; })))"
                 )
                 box = await page.locator("body > *").first.bounding_box()
+            if box and box["height"] > MAX_CAPTURE_PX:
+                # Beyond the capture limit the screenshot comes back empty, so
+                # scale the page down instead of producing a broken card.
+                scale = MAX_CAPTURE_PX / box["height"]
+                logger.info(
+                    "页面高度 %.0fpx 超过截图上限，按 %.2fx 缩放渲染",
+                    box["height"],
+                    scale,
+                )
+                await page.evaluate(
+                    "(k) => { document.documentElement.style.zoom = k; }", scale
+                )
+                box = await page.locator("body > *").first.bounding_box()
             if box:
                 await page.set_viewport_size(
                     {"width": int(box["width"]) + 2, "height": int(box["height"]) + 2}
@@ -239,6 +271,14 @@ class Renderer:
                 await page.screenshot(
                     path=str(output), full_page=True, type="jpeg", quality=85
                 )
+            if not _capture_is_usable(output):
+                logger.error(
+                    "渲染 %s 产出空文件（高度 %.0fpx），回退为文字",
+                    template_name,
+                    box["height"] if box else 0,
+                )
+                output.unlink(missing_ok=True)
+                return None
             return output
         except Exception as exc:  # noqa: BLE001 - degrade to text output
             logger.error("渲染 %s 截图失败: %s", template_name, exc)

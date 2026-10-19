@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.4.3-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.4.4-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -360,6 +360,10 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.4.4 (2026-10-19)
+
+- 🐛 **修复超高公告卡片发送失败**：正文很长、配图很多的公告（如「〓朝陇山 余量上架〓」，9 张长图）会让卡片高度达到 7 万像素，超过 Chromium 的截图上限，生成的是 0 字节文件，QQ 上传时报 `rich media transfer failed`，群里只收到「官方新公告」四个字。现在超过上限时按比例缩放渲染，并在截图后校验产物——万一仍是空文件就自动回退为文字，不再发出坏图
 
 ### 0.4.3 (2026-10-14)
 
