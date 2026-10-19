@@ -697,7 +697,7 @@ async def main() -> int:
     # ── 超长公告：整卡渲染失败时只保留首图重渲染一次 ──
     sent.clear()
 
-    def artwork_record(ident, image_count):
+    def artwork_record(ident, image_count, url=""):
         images = [
             f"https://example.invalid/{ident}-{i}.jpg" for i in range(image_count)
         ]
@@ -708,7 +708,7 @@ async def main() -> int:
             "brief": "",
             "group": "OFFICIAL",
             "group_cn": "官方",
-            "url": "",
+            "url": url,
             "ts": int(time.time()) - 60,
             "date_text": "2026-10-19 12:00",
             "text": "第一段正文",
@@ -753,6 +753,22 @@ async def main() -> int:
         "重渲染的 body_html 恰好保留 1 张图",
         len(rendered) == 2 and rendered[1]["announce"]["body_html"].count("<img") == 1,
         rendered[1]["announce"]["body_html"] if len(rendered) == 2 else "no retry",
+    )
+
+    # A card is a rendered image, so the original article link can only reach
+    # the reader as message text. A trimmed card must carry it there, otherwise
+    # the other images are unreachable from the bot.
+    rendered.clear()
+    sent.clear()
+    article_url = "https://www.skland.com/article?id=6389248"
+    await poll_with(artwork_record("6389248", 9, article_url), fail_once_then_cover)
+    pushed_link_text = " ".join(
+        str(getattr(seg, "text", "")) for grp in sent for seg in grp
+    )
+    check(
+        "首图卡片的推送文本包含原文链接",
+        article_url in pushed_link_text,
+        pushed_link_text[:160],
     )
 
     # A single image needs no retry: the first failure falls through to the

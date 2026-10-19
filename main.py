@@ -380,7 +380,7 @@ class ArknightsPlugin(Star):
 
     async def _render_detail_card(
         self, item: dict[str, Any], detail: dict[str, Any], note: str
-    ) -> Path | None:
+    ) -> tuple[Path | None, bool]:
         """Render a detail card, retrying with just the cover when too tall.
 
         Args:
@@ -390,17 +390,20 @@ class ArknightsPlugin(Star):
             note: Line appended to the trimmed card explaining what was left out.
 
         Returns:
-            Path of the rendered image, or ``None`` when even the cover-only card
-            cannot be rendered.
+            Pair ``(image, trimmed)``. ``image`` is the rendered path, or ``None``
+            when even the cover-only card cannot be rendered. ``trimmed`` is
+            ``True`` only when the cover-only retry produced that image; it is
+            ``False`` when the first render succeeded, when no retry was
+            attempted, or when the result is ``None``.
         """
         image = await self._render(
             "announce_detail.html", {"announce": {**item, **detail}}
         )
         images = detail.get("images") or []
         if image is not None or len(images) <= 1:
-            return image
+            return image, False
         total = len(images)
-        return await self._render(
+        image = await self._render(
             "announce_detail.html",
             {
                 "announce": {
@@ -412,6 +415,7 @@ class ArknightsPlugin(Star):
                 }
             },
         )
+        return image, image is not None
 
     @staticmethod
     def _args(event: AstrMessageEvent) -> list[str]:
@@ -1846,17 +1850,26 @@ class ArknightsPlugin(Star):
                 except AnnounceError as exc:
                     yield event.plain_result(f"公告正文获取失败：{exc}")
                     return
-            image = await self._render_detail_card(
+            image, trimmed = await self._render_detail_card(
                 target,
                 detail,
                 f"（共 {len(detail.get('images') or [])} 张图，此处仅显示首图）",
             )
+            # The card is a rendered image, so a URL painted inside it cannot be
+            # clicked. The original article link goes in the text instead.
+            link = str(target.get("url") or "")
             if image is not None:
-                yield event.chain_result([Image.fromFileSystem(str(image))])
+                segments: list[Any] = []
+                if trimmed and link:
+                    segments.append(Plain(f"原文：{link}"))
+                segments.append(Image.fromFileSystem(str(image)))
+                yield event.chain_result(segments)
                 return
             urls = [str(u) for u in (detail.get("images") or [])[:_MAX_FALLBACK_IMAGES]]
             if urls:
-                yield event.chain_result([Image.fromURL(urls[0])])
+                segments = [Plain(f"原文：{link}")] if link else []
+                segments.append(Image.fromURL(urls[0]))
+                yield event.chain_result(segments)
                 for url in urls[1:]:
                     yield event.chain_result([Image.fromURL(url)])
                 return
@@ -1966,7 +1979,7 @@ class ArknightsPlugin(Star):
         # actual content. The first few are delivered as rendered cards (the
         # same card `ark公告 <编号>` returns) and the rest stay a text list.
         card_limit = max(0, int(self.config.get("announce_push_cards", 3) or 0))
-        cards: list[tuple[dict[str, Any], Path | None]] = []
+        cards: list[tuple[dict[str, Any], Path | None, bool]] = []
         for item in fresh[:card_limit]:
             # The self-hosted source ships the body with the record, so there is
             # nothing to fetch; its ids are Skland post ids and would 404 against
@@ -1985,15 +1998,15 @@ class ArknightsPlugin(Star):
                     detail = await self._announce.fetch_detail(item["id"])
                 except AnnounceError as exc:
                     logger.warning("[公告轮询] %s 正文获取失败: %s", item["id"], exc)
-                    cards.append((item, None))
+                    cards.append((item, None, False))
                     continue
-            image = await self._render_detail_card(
+            image, trimmed = await self._render_detail_card(
                 item,
                 detail,
                 f"（共 {len(detail.get('images') or [])} 张图，"
-                f"其余发送 `ark公告 {item['id']}` 查看）",
+                "仅显示首图，完整内容见原文链接）",
             )
-            cards.append((item, image))
+            cards.append((item, image, trimmed))
 
         text = "官方新公告\n\n" + "\n\n".join(
             f"[{item['group_cn']}] {item['title']}\n{item['date_text']}"
@@ -2011,21 +2024,28 @@ class ArknightsPlugin(Star):
                 await self._notify(umo, text)
                 continue
             await self._notify(umo, "官方新公告")
-            for item, image in cards:
+            for item, image, trimmed in cards:
                 header = f"[{item['group_cn']}] {item['title']}\n{item['date_text']}"
+                link = str(item.get("url") or "")
                 if image is None and item.get("images"):
                     # The card was too tall to be usable; the announcement is
                     # image-driven, so deliver the artwork itself.
                     urls = [str(u) for u in item["images"][:_MAX_FALLBACK_IMAGES]]
                     total = len(item["images"])
                     caption = header + f"\n（共 {total} 张，先发 {len(urls)} 张"
-                    if total > len(urls):
-                        caption += f"，其余发送 `ark公告 {item['id']}` 查看"
+                    if total > len(urls) and link:
+                        caption += "，其余见原文链接"
                     caption += "）"
+                    if link:
+                        caption += f"\n原文：{link}"
                     await self._notify(umo, caption, urls[0])
                     for url in urls[1:]:
                         await self._notify(umo, "", url)
                     continue
+                if trimmed and link:
+                    # A rendered card cannot carry a clickable link, so the
+                    # original article URL has to travel as message text.
+                    header += f"\n原文：{link}"
                 await self._notify(umo, header, image)
             if rest > 0:
                 await self._notify(umo, f"……另有 {rest} 条，发送 `ark公告` 查看全部")
