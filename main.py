@@ -378,6 +378,41 @@ class ArknightsPlugin(Star):
         payload.update(data)
         return await self._renderer.render_html(template, payload)
 
+    async def _render_detail_card(
+        self, item: dict[str, Any], detail: dict[str, Any], note: str
+    ) -> Path | None:
+        """Render a detail card, retrying with just the cover when too tall.
+
+        Args:
+            item: Announcement record (title, date, group labels).
+            detail: Body payload with ``body_html``, ``text``, ``images`` and
+                ``image_total``.
+            note: Line appended to the trimmed card explaining what was left out.
+
+        Returns:
+            Path of the rendered image, or ``None`` when even the cover-only card
+            cannot be rendered.
+        """
+        image = await self._render(
+            "announce_detail.html", {"announce": {**item, **detail}}
+        )
+        images = detail.get("images") or []
+        if image is not None or len(images) <= 1:
+            return image
+        total = len(images)
+        return await self._render(
+            "announce_detail.html",
+            {
+                "announce": {
+                    **item,
+                    **detail,
+                    "body_html": _body_html(str(detail.get("text") or ""), images[:1])
+                    + f"<p>{html_module.escape(note)}</p>",
+                    "image_total": total,
+                }
+            },
+        )
+
     @staticmethod
     def _args(event: AstrMessageEvent) -> list[str]:
         """Return the arguments that follow the command name.
@@ -1811,8 +1846,11 @@ class ArknightsPlugin(Star):
                 except AnnounceError as exc:
                     yield event.plain_result(f"公告正文获取失败：{exc}")
                     return
-            context = {**target, **detail}
-            image = await self._render("announce_detail.html", {"announce": context})
+            image = await self._render_detail_card(
+                target,
+                detail,
+                f"（共 {len(detail.get('images') or [])} 张图，此处仅显示首图）",
+            )
             if image is not None:
                 yield event.chain_result([Image.fromFileSystem(str(image))])
                 return
@@ -1949,28 +1987,12 @@ class ArknightsPlugin(Star):
                     logger.warning("[公告轮询] %s 正文获取失败: %s", item["id"], exc)
                     cards.append((item, None))
                     continue
-            image = await self._render(
-                "announce_detail.html", {"announce": {**item, **detail}}
+            image = await self._render_detail_card(
+                item,
+                detail,
+                f"（共 {len(detail.get('images') or [])} 张图，"
+                f"其余发送 `ark公告 {item['id']}` 查看）",
             )
-            if image is None and len(detail.get("images") or []) > 1:
-                # The full card is too tall to deliver. Keep the cover and point
-                # at the command, which can hand over the rest on request.
-                total = len(detail["images"])
-                note = f"（共 {total} 张图，其余发送 `ark公告 {item['id']}` 查看）"
-                image = await self._render(
-                    "announce_detail.html",
-                    {
-                        "announce": {
-                            **item,
-                            **detail,
-                            "body_html": _body_html(
-                                str(detail.get("text") or ""), detail["images"][:1]
-                            )
-                            + f"<p>{html_module.escape(note)}</p>",
-                            "image_total": total,
-                        }
-                    },
-                )
             cards.append((item, image))
 
         text = "官方新公告\n\n" + "\n\n".join(

@@ -866,6 +866,45 @@ async def main() -> int:
         f"{[result[0] for result in cmd_results]}",
     )
 
+    # The command must apply the same cover-only retry the push uses. Running
+    # `ark公告 <编号>` against a too-tall card has to render twice (full card,
+    # then cover) and hand over a single card image — it must never fall through
+    # to the per-image artwork fallback when the cover card succeeds.
+    rendered.clear()
+    cover_cmd_plugin = make_source_plugin(
+        FakeFeed([artwork_record("6389248", 9)]),
+        {"feed_source": "selfhosted"},
+    )
+    cover_cmd_plugin._render = fail_once_then_cover
+    cover_cmd_results = await drive(
+        cover_cmd_plugin.show_announcements(StubEvent("/ark公告 6389248"))
+    )
+    check(
+        "命令查详情整卡渲染失败后重渲染一次",
+        len(rendered) == 2,
+        f"{len(rendered)} calls",
+    )
+    check(
+        "命令重渲染的 body_html 恰好保留 1 张图",
+        len(rendered) == 2 and rendered[1]["announce"]["body_html"].count("<img") == 1,
+        rendered[1]["announce"]["body_html"] if len(rendered) == 2 else "no retry",
+    )
+    cover_cmd_images = [
+        seg
+        for result in cover_cmd_results
+        if result[0] == "chain"
+        for seg in result[1]
+        if type(seg).__name__ == "Image"
+    ]
+    check(
+        "命令封面卡成功时只发一张卡、不回退逐图发送",
+        len(cover_cmd_results) == 1
+        and len(cover_cmd_images) == 1
+        and bool(getattr(cover_cmd_images[0], "path", "")),
+        f"results={[result[0] for result in cover_cmd_results]} "
+        f"images={len(cover_cmd_images)}",
+    )
+
     # `feed_source: official` must pin the command to the website list, never
     # the self-hosted feed, so the fallback the pushes rely on still resolves
     # the ids the pushes announce.
