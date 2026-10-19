@@ -1970,10 +1970,14 @@ class ArknightsPlugin(Star):
         # being announced months late; the watermark keeps a restart from
         # re-sending what already went out.
         fresh = self._filter_pushable(records, watermark, now, window)
-        if newest > watermark:
-            await self.store.set_announce_watermark(newest)
         if not fresh:
+            # Nothing went out, so nothing may move the watermark: advancing past
+            # an entry the filters held back (outside the age window, excluded by
+            # keyword, or future-dated) would drop it permanently.
             return
+        # Only what was delivered may advance the watermark, and only as far as
+        # the newest delivered entry — never to `newest` of the whole listing.
+        await self.store.set_announce_watermark(max(int(item["ts"]) for item in fresh))
 
         # Announcements are mostly artwork, so a title-only push buries the
         # actual content. The first few are delivered as rendered cards (the

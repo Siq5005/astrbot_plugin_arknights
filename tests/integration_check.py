@@ -694,6 +694,132 @@ async def main() -> int:
     await plugin.unsubscribe_announce(StubEvent("/ark取消订阅公告")).__anext__()
     check("公告订阅可取消", not await plugin.store.list_announce_subs())
 
+    # ── 水位线只随实际推送的条目推进 ──────────────────────────────────────
+    async def poll_watermark(records, watermark, exclude=""):
+        """Drive one announce poll against a fixed feed and return the outcome.
+
+        Args:
+            records: Records the website source returns, newest first.
+            watermark: Watermark to seed before the poll.
+            exclude: Comma-separated ``feed_exclude_keywords`` for this poll.
+
+        Returns:
+            The ``(watermark, pushed_text)`` pair after the poll completes.
+        """
+        pushed: list[list[str]] = []
+
+        async def capture_poll(umo, chain):
+            pushed.append(list(chain.chain))
+
+        polled = plugin_module.ArknightsPlugin(
+            context=SimpleNamespace(send_message=capture_poll),
+            config={"feed_source": "official", "feed_exclude_keywords": exclude},
+        )
+        polled.store = Store(Path("/tmp/ak-integration/users.json"))
+        polled.store.path.unlink(missing_ok=True)
+        await polled.store.set_announce_sub("10001", "test:PrivateMessage:10001", True)
+        await polled.store.set_announce_watermark(watermark)
+
+        async def feed():
+            return list(records)
+
+        async def detail(cid):
+            return {
+                "cid": cid,
+                "url": f"https://ak.hypergryph.com/news/{cid}",
+                "body_html": "<p>正文</p>",
+                "text": "正文",
+                "images": [],
+                "image_total": 0,
+            }
+
+        async def render(template, data):
+            return None
+
+        polled._announce.fetch = feed
+        polled._announce.fetch_detail = detail
+        polled._render = render
+        await polled._announce_poll_job()
+        text = " ".join(
+            str(getattr(segment, "text", "")) for group in pushed for segment in group
+        )
+        return await polled.store.announce_watermark(), text
+
+    now_ts = int(time.time())
+
+    # Nothing pushable: a record outside the age window must not move the
+    # watermark (the old code advanced it to `newest` and dropped it forever).
+    stale_wm = now_ts - 100 * 3600
+    stale_ts = now_ts - 42 * 3600
+    wm1, text1 = await poll_watermark(
+        [announcement("9101", stale_ts, "[旧] 42 小时前的公告")], stale_wm
+    )
+    check("无推内容时水位线不动", wm1 == stale_wm, f"wm={wm1} expected={stale_wm}")
+    check("无推内容时不发任何消息", text1 == "", text1[:120])
+
+    # Only the pushed item advances the watermark: an excluded newer record must
+    # not drag the watermark past the pushed older one.
+    pushed_ts = now_ts - 1800
+    excluded_ts = now_ts - 60
+    wm2, text2 = await poll_watermark(
+        [
+            announcement(
+                "9103", excluded_ts, "[签到福利] 森空岛10月签到福利活动开启！"
+            ),
+            announcement("9102", pushed_ts, "[活动预告] 新活动即将开启"),
+        ],
+        now_ts - 3600,
+        exclude="签到福利",
+    )
+    check(
+        "水位线只推进到实际推送的条目",
+        wm2 == pushed_ts,
+        f"wm={wm2} expected={pushed_ts}",
+    )
+    check("被排除的更新条目不会拖高水位线", wm2 != excluded_ts, f"wm={wm2}")
+    check(
+        "推送的正是未命中关键词的条目",
+        "新活动" in text2 and "签到福利" not in text2,
+        text2[:160],
+    )
+
+    # A future-dated record cannot poison the watermark: it is the newest but is
+    # never "fresh", so the old code would jump the watermark past every real
+    # announcement and keep it there.
+    normal_ts = now_ts - 1800
+    future_ts = now_ts + 86400
+    wm3, text3 = await poll_watermark(
+        [
+            announcement("9105", future_ts, "[未来] 来自未来的公告"),
+            announcement("9104", normal_ts, "[活动预告] 正常的新公告"),
+        ],
+        now_ts - 3600,
+    )
+    check(
+        "未来时间戳不会毒化水位线",
+        wm3 == normal_ts,
+        f"wm={wm3} expected={normal_ts}",
+    )
+    check(
+        "未来时间戳的公告被忽略",
+        "未来" not in text3 and "正常的新公告" in text3,
+        text3[:160],
+    )
+
+    # The watermark now sits at the normal record, so the next poll must not
+    # re-deliver it.
+    wm3b, text3b = await poll_watermark(
+        [
+            announcement("9105", future_ts, "[未来] 来自未来的公告"),
+            announcement("9104", normal_ts, "[活动预告] 正常的新公告"),
+        ],
+        wm3,
+    )
+    check("未来条目被忽略后不会重复推送", text3b == "", text3b[:160])
+    check(
+        "重轮询后水位线保持不变", wm3b == normal_ts, f"wm={wm3b} expected={normal_ts}"
+    )
+
     # ── 超长公告：整卡渲染失败时只保留首图重渲染一次 ──
     sent.clear()
 
