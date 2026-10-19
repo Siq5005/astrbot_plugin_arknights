@@ -167,6 +167,19 @@ async def test_fetch_official_requests_five_items():
 
 
 @pytest.mark.anyio
+async def test_fetch_official_keeps_only_the_first_page_size_rows():
+    now = int(time.time())
+    # The upstream may ignore ``pageSize`` and return more rows; only the first
+    # PAGE_SIZE of them may become records.
+    rows = [_list_row(str(index), f"t{index}", now - 60 * index) for index in range(8)]
+    fake = _FakeSkland([_list_page(rows)])
+
+    records = await fetch_official(fake, "tok", now=now)
+
+    assert [record["id"] for record in records] == ["0", "1", "2", "3", "4"]
+
+
+@pytest.mark.anyio
 async def test_fetch_official_raises_on_business_error():
     fake = _FakeSkland([{"code": 10001, "message": "参数错误"}])
 
@@ -183,9 +196,12 @@ async def test_fetch_official_makes_exactly_one_request():
                 "code": 0,
                 "data": {
                     "list": [
-                        _list_row("a", "alpha", now - 60),
-                        _list_row("b", "beta", now - 120),
-                        _list_row("c", "gamma", now - 180),
+                        # Deliberately not newest-first, with gamma repeated, so
+                        # the sort and the same-page dedupe are both exercised.
+                        _list_row("gamma", "gamma older", now - 180),
+                        _list_row("alpha", "alpha", now - 60),
+                        _list_row("beta", "beta", now - 120),
+                        _list_row("gamma", "gamma repeated", now - 300),
                     ],
                     "hasMore": True,
                     "pageToken": "next-page-token",
@@ -209,7 +225,7 @@ async def test_fetch_official_makes_exactly_one_request():
 
     assert len(fake.urls) == 1
     assert "pageToken" not in fake.urls[0]
-    assert [record["id"] for record in records] == ["a", "b", "c"]
+    assert [record["id"] for record in records] == ["alpha", "beta", "gamma"]
 
 
 def _detail_envelope(text):

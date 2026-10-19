@@ -26,12 +26,9 @@ PAGE_SIZE = 5
 FEED_PATH = "/web/v2/home/index?gameId={game}&cateId={cate}&pageSize={size}&sortType=2"
 ARTICLE_URL_TEMPLATE = "https://www.skland.com/article?id={id}"
 
-# Detail requests are one per item, so they are paced and capped independently of
-# the single list request. The cap guards against the upstream ever returning
-# more than ``pageSize`` rows, keeping each refresh bounded while the cache makes
-# progress durable across refreshes.
+# Detail requests are one per item, spaced out to avoid a burst of requests per
+# refresh; the cache makes that progress durable across refreshes.
 _DETAIL_DELAY_SECONDS = 0.5
-_MAX_DETAIL_FETCHES = 10
 
 
 class FeedError(Exception):
@@ -228,7 +225,8 @@ async def fetch_official(
     data = payload.get("data")
     if not isinstance(data, dict):
         raise FeedError("森空岛接口响应缺少 data")
-    rows = data.get("list") or []
+    # The upstream may ignore ``pageSize``; keep the operator's hard cap local.
+    rows = (data.get("list") or [])[:PAGE_SIZE]
 
     for row in rows:
         raw = row.get("item") if isinstance(row, dict) else None
@@ -256,8 +254,6 @@ async def fetch_official(
             if cached is not None:
                 record["text"] = cached
                 continue
-            if fetched >= _MAX_DETAIL_FETCHES:
-                break
             if fetched:
                 await asyncio.sleep(_DETAIL_DELAY_SECONDS)
             fetched += 1
