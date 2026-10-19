@@ -52,7 +52,7 @@ from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
-PLUGIN_VERSION = "0.4.4"
+PLUGIN_VERSION = "0.4.5"
 
 # How often the health watchdog probes the self-hosted service, and how many
 # consecutive bad observations it takes to raise an alert. The service writes
@@ -84,6 +84,10 @@ NO_BINDING_TEXT = "你还没有绑定账号。发送 `ark绑定` 扫码登录即
 
 # Substrings that indicate the stored passport token is no longer usable.
 AUTH_ERROR_MARKERS = ("未登录", "失效", "过期", "unauthorized", "401", "403")
+
+# How many source images to forward when a card cannot be rendered; the rest are
+# reachable through `ark公告 <编号>`.
+_MAX_FALLBACK_IMAGES = 6
 
 # Every command is namespaced with ark so that it can never collide with the
 # Endfield plugin (which registers bare 理智 / 便签 / 签到 / 扫码绑定 ... and a
@@ -410,7 +414,7 @@ class ArknightsPlugin(Star):
         self,
         umo: str,
         text: str,
-        image: Path | None = None,
+        image: Path | str | None = None,
         mention: str | None = None,
     ) -> None:
         """Send a message to a session outside the current event flow.
@@ -418,7 +422,8 @@ class ArknightsPlugin(Star):
         Args:
             umo: Unified message origin of the target session.
             text: Message text.
-            image: Optional rendered card appended after the text.
+            image: Optional image appended after the text; a ``str`` is a remote
+                URL, otherwise a local file path.
             mention: Platform user id to @ before the text. Only meaningful in a
                 group session; callers decide whether to pass it.
         """
@@ -427,7 +432,11 @@ class ArknightsPlugin(Star):
             chain.append(At(qq=mention))
         chain.append(Plain(text))
         if image is not None:
-            chain.append(Image.fromFileSystem(str(image)))
+            chain.append(
+                Image.fromURL(image)
+                if isinstance(image, str)
+                else Image.fromFileSystem(str(image))
+            )
         try:
             await self.context.send_message(umo, MessageChain(chain))
         except Exception as exc:  # noqa: BLE001 - never let delivery break a job
@@ -1913,6 +1922,16 @@ class ArknightsPlugin(Star):
             await self._notify(umo, "官方新公告")
             for item, image in cards:
                 header = f"[{item['group_cn']}] {item['title']}\n{item['date_text']}"
+                if image is None and item.get("images"):
+                    # The card was too tall to be usable; the announcement is
+                    # image-driven, so deliver the artwork itself.
+                    urls = [str(u) for u in item["images"][:_MAX_FALLBACK_IMAGES]]
+                    await self._notify(
+                        umo, header + f"\n（共 {len(urls)} 张图）", urls[0]
+                    )
+                    for url in urls[1:]:
+                        await self._notify(umo, "", url)
+                    continue
                 await self._notify(umo, header, image)
             if rest > 0:
                 await self._notify(umo, f"……另有 {rest} 条，发送 `ark公告` 查看全部")

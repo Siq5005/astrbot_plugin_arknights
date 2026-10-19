@@ -7,7 +7,7 @@
 ### *罗德岛终端 · 明日方舟 AstrBot 插件*
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-FFB400?style=for-the-badge&logo=python)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-0.4.4-FFB400?style=for-the-badge)](#-更新日志)
+[![Version](https://img.shields.io/badge/version-0.4.5-FFB400?style=for-the-badge)](#-更新日志)
 [![License](https://img.shields.io/badge/license-MIT-FFB400?style=for-the-badge)](LICENSE)
 
 ### 🚀 基于森空岛官方接口的明日方舟查询工具
@@ -360,6 +360,10 @@ astrbot_plugin_arknights/
 
 <details>
 <summary>点击展开版本历史</summary>
+
+### 0.4.5 (2026-10-19)
+
+- 🐛 **修复超长公告卡片仍然发送失败**：0.4.4 把超高页面缩放后虽然不再产生空文件，但产物是 725×59896、6.9 MB 的细长条，QQ 依然拒收（`rich media transfer failed`）。现在超过 30000px 的页面不再合成卡片，改为**直接转发公告自带原图**（最多 6 张，其余用 `ark公告 <编号>` 查看）——既发得出去，也看得清
 
 ### 0.4.4 (2026-10-19)
 

@@ -17,6 +17,6 @@ def test_capture_is_usable_rejects_missing_file(tmp_path):
     assert render._capture_is_usable(tmp_path / "nope.jpg") is False
 
 
-def test_max_capture_px_stays_under_the_chromium_limit():
-    # Chromium writes an empty file past 65535px; the margin must hold.
-    assert render.MAX_CAPTURE_PX < 65535
+def test_max_card_px_is_conservative():
+    # Above this a card is forwarded as source artwork instead of rendered.
+    assert render.MAX_CARD_PX <= 30000

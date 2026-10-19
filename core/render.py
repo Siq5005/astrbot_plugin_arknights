@@ -47,9 +47,10 @@ CARD_THEMES: dict[str, str] = {
 DEVICE_SCALE_FACTOR = 2.0
 MAX_TEXTURE_PX = 16384
 
-# Chromium refuses to capture beyond 65535px and silently writes an empty file
-# instead, which the sender then uploads as a broken image. Keep a margin.
-MAX_CAPTURE_PX = 60000
+# Above this a card is a narrow, multi-megabyte sliver that QQ refuses to
+# upload anyway, so such announcements are sent as their original artwork
+# instead of a composite card.
+MAX_CARD_PX = 30000
 
 
 def _capture_is_usable(path: Path) -> bool:
@@ -247,19 +248,13 @@ class Renderer:
                     " img.onload = resolve; img.onerror = resolve; })))"
                 )
                 box = await page.locator("body > *").first.bounding_box()
-            if box and box["height"] > MAX_CAPTURE_PX:
-                # Beyond the capture limit the screenshot comes back empty, so
-                # scale the page down instead of producing a broken card.
-                scale = MAX_CAPTURE_PX / box["height"]
+            if box and box["height"] > MAX_CARD_PX:
                 logger.info(
-                    "页面高度 %.0fpx 超过截图上限，按 %.2fx 缩放渲染",
+                    "页面高度 %.0fpx 超过卡片上限 %.0fpx，改发原图",
                     box["height"],
-                    scale,
+                    MAX_CARD_PX,
                 )
-                await page.evaluate(
-                    "(k) => { document.documentElement.style.zoom = k; }", scale
-                )
-                box = await page.locator("body > *").first.bounding_box()
+                return None
             if box:
                 await page.set_viewport_size(
                     {"width": int(box["width"]) + 2, "height": int(box["height"]) + 2}
