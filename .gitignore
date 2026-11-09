@@ -6,6 +6,10 @@ node_modules/
 .ruff_cache/
 .pytest_cache/
 
+# Runtime data written by AstrBot when the plugin runs; the integration check
+# writes data/cmd_config.json and data/t2i_templates/ here too.
+data/
+
 # Agent planning artifacts: kept on disk, never published.
 # They carry local recon notes (host IPs, machine specs, upstream probe results)
 # that do not belong in a public plugin repository.

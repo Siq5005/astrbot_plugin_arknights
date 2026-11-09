@@ -50,7 +50,13 @@ from .core.operators import (
     group_operators,
 )
 from .core.render import Renderer
-from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
+from .core.skland import (
+    Credential,
+    SignInResult,
+    SklandClient,
+    SklandError,
+    UserBinding,
+)
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
@@ -787,13 +793,18 @@ class ArknightsPlugin(Star):
     # ── data queries ──────────────────────────────────────────────────────
 
     async def _player_data(
-        self, user: dict[str, Any], binding: dict[str, Any]
+        self,
+        user: dict[str, Any],
+        binding: dict[str, Any],
+        cred: Credential | None = None,
     ) -> dict[str, Any]:
         """Fetch the in-game snapshot for a role, reusing a short lived cache.
 
         Args:
             user: Stored user record holding the passport token.
             binding: Binding entry identifying the role.
+            cred: Credential already exchanged by the caller; exchanged from
+                ``user`` when omitted.
 
         Returns:
             The ``data`` section of the player info response.
@@ -807,10 +818,11 @@ class ArknightsPlugin(Star):
         cached = self._player_cache.get(uid)
         if cached and cached[0] > now:
             return cached[1]
-        authorization = await self.skland.get_authorization(
-            str(user.get("token") or "")
-        )
-        cred = await self.skland.get_credential(authorization)
+        if cred is None:
+            authorization = await self.skland.get_authorization(
+                str(user.get("token") or "")
+            )
+            cred = await self.skland.get_credential(authorization)
         data = await self.skland.get_player_info(cred, uid)
         self._player_cache[uid] = (now + ttl, data)
         return data
@@ -1429,11 +1441,13 @@ class ArknightsPlugin(Star):
             return
         user, binding = resolved
         try:
-            data = await self._player_data(user, binding)
+            # Exchange once and reuse it for both the player snapshot and the
+            # garrison requests instead of paying for two OAuth grants.
             authorization = await self.skland.get_authorization(
                 str(user.get("token") or "")
             )
             cred = await self.skland.get_credential(authorization)
+            data = await self._player_data(user, binding, cred)
             resource, records = await GarrisonClient(self.skland).fetch(
                 cred, str(binding.get("uid") or "")
             )

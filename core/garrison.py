@@ -142,7 +142,12 @@ def pick_char(maps: dict[str, Any], chess: dict[str, Any]) -> dict[str, Any]:
         icon = str(raw.get("iconUrl") or "")
         if icon:
             equips.append({"icon": icon})
-    level = int(info.get("chessLevel") or 0)
+    # ``chessLevel`` comes from the payload, so treat it like ``roman_level``
+    # does: a non-numeric value must not raise outside the command's guard.
+    try:
+        level = int(info.get("chessLevel") or 0)
+    except (TypeError, ValueError):
+        level = 0
     return {
         "name": str(info.get("charName") or char.get("name") or char_id),
         "avatar": str(char.get("avatarUrl") or char.get("halfBodyUrl") or ""),
@@ -199,8 +204,9 @@ def prepare_record(record: dict[str, Any], maps: dict[str, Any]) -> dict[str, An
     success = int(record.get("completeState") or 0) == 1
     return {
         "success": success,
-        "title": str(record.get("title") or "")
-        or ("模拟成功" if success else "模拟失败"),
+        # The badge always states the outcome; the payload's ``title`` is empty
+        # in practice and must never replace it.
+        "title": "模拟成功" if success else "模拟失败",
         "pass_round": record.get("passRound") or 0,
         "mode": mode_label(record.get("modeType")),
         "band_icon": str(band.get("iconUrl") or ""),

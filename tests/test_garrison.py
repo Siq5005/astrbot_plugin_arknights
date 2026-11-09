@@ -10,6 +10,7 @@ from core.garrison import (
     difficulty_label,
     format_ts,
     mode_label,
+    pick_char,
     prepare_record,
     roman_level,
 )
@@ -179,12 +180,31 @@ def test_prepare_record_maps_fields():
     assert record["bonds"][0]["activate"] is True
 
 
-def test_prepare_record_prefers_record_title():
-    record = prepare_record(
+def test_prepare_record_ignores_record_title():
+    # The badge always spells out the outcome, even when the payload carries a
+    # ``title``; the raw field is empty in practice and must not win.
+    success = prepare_record(
         {**RECORD, "title": "自定义", "completeState": 1}, build_maps(RESOURCE)
     )
-    assert record["success"] is True
-    assert record["title"] == "自定义"
+    assert success["success"] is True
+    assert success["title"] == "模拟成功"
+
+    failure = prepare_record(
+        {**RECORD, "title": "自定义", "completeState": 0}, build_maps(RESOURCE)
+    )
+    assert failure["success"] is False
+    assert failure["title"] == "模拟失败"
+
+
+def test_pick_char_tolerates_non_numeric_level():
+    # A malformed ``chessLevel`` degrades to level 0 instead of raising outside
+    # the command's try/except.
+    unit = pick_char(
+        build_maps(RESOURCE),
+        {"chessInfo": {"charId": "char_1039_thorn2", "chessLevel": "unknown"}},
+    )
+    assert unit["level"] == 0
+    assert unit["roman"] == "0"
 
 
 def test_format_ts_invalid_yields_dash():

@@ -58,7 +58,7 @@
 
 ✅ **图像资源** - 干员立绘 / 头像、职业徽章、稀有度 / 精英化 / 潜能标记、基建设施图标、时装立绘
 
-✅ **卡片视觉** - 每张卡片独立配色主题（12 套）、干员瓦片按稀有度着色、蓝图网格与渐变底纹，全部由 CSS 生成，无位图素材
+✅ **卡片视觉** - 每张卡片独立配色主题（13 套）、干员瓦片按稀有度着色、蓝图网格与渐变底纹，全部由 CSS 生成，无位图素材
 
 ✅ **指令隔离** - 所有指令以 `ark` 开头，与终末地插件（`~` 前缀）互不抢答；漏写唤醒前缀时给出提示
 
@@ -204,7 +204,7 @@ astrbot_plugin_arknights/
 > 图片文件本身是 **1800px**（2 倍 DPI 渲染结果），在高分屏上依然锐利，点击可查看原图。
 
 <details>
-<summary>点击展开全部 13 张预览图</summary>
+<summary>点击展开 13 张预览图</summary>
 
 **`ark帮助`**
 
@@ -286,7 +286,7 @@ astrbot_plugin_arknights/
 
 </details>
 
-> 预览图由 `tests/render_preview.py` 一键重新生成：它会用固定测试数据渲染全部 13 张卡片，
+> 预览图由 `tests/render_preview.py` 一键重新生成：它会用固定测试数据渲染 13 张卡片（`ark卫戍战绩` 暂无预览图），
 > 并把渲染器输出（原生 1800px）直接复制到 `docs/preview/`，**不做任何缩放**——
 > 因此预览与机器人实际发送给用户的图片完全一致。UI 设计稿见 `docs/preview/ui-design.png`。
 
@@ -321,8 +321,8 @@ astrbot_plugin_arknights/
 | `--theme-2` | 辅助色，用于顶部色条与分区标题渐变 |
 | `--theme-soft` | 主色的低透明度版本，用于底纹斜切块 |
 
-现有 **12 套主题**：`t-help`、`t-profile`、`t-sanity`、`t-operator`、`t-roster`、`t-gacha`、
-`t-announce`、`t-building`、`t-task`、`t-campaign`、`t-rogue`、`t-recruit`。
+现有 **13 套主题**：`t-help`、`t-profile`、`t-sanity`、`t-operator`、`t-roster`、`t-gacha`、
+`t-announce`、`t-building`、`t-task`、`t-campaign`、`t-rogue`、`t-recruit`、`t-garrison`。
 
 卡片背景全部由 CSS 渐变叠加，**没有任何位图素材**（仓库零增重、任意 DPI 都锐利、长卡片不会出现平铺接缝）：
 
