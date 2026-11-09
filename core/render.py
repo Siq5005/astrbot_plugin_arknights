@@ -41,6 +41,7 @@ CARD_THEMES: dict[str, str] = {
     "recruit.html": "t-recruit",
     "rogue.html": "t-rogue",
     "operator_list.html": "t-roster",
+    "garrison_recent.html": "t-garrison",
 }
 
 # Preferred device pixel ratio, and Chromium's hard screenshot texture limit.

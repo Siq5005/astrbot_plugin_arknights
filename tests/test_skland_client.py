@@ -135,6 +135,33 @@ async def test_signature_headers_are_sent():
     assert seen["sign"] and len(seen["sign"]) == 32
 
 
+@pytest.mark.anyio
+async def test_get_garrison_resource_returns_data():
+    def handler(request):
+        assert request.url.path == "/api/v1/game/garrison/guide/resource"
+        return httpx.Response(
+            200,
+            json={"code": 0, "data": {"seasons": [{"seasonId": "s1"}]}},
+        )
+
+    data = await _client(handler).get_garrison_resource(CRED)
+    assert data == {"seasons": [{"seasonId": "s1"}]}
+
+
+@pytest.mark.anyio
+async def test_get_garrison_history_log_passes_uid_and_season():
+    def handler(request):
+        assert "uid=1" in str(request.url.query)
+        assert "seasonId=s1" in str(request.url.query)
+        return httpx.Response(
+            200,
+            json={"code": 0, "data": {"records": [{"id": "r1"}]}},
+        )
+
+    records = await _client(handler).get_garrison_history_log(CRED, "1", "s1")
+    assert records == [{"id": "r1"}]
+
+
 def test_parse_sanity_reads_status_ap():
     data = {"status": {"ap": {"current": 10, "max": 135, "completeRecoveryTime": -1}}}
     assert SklandClient.parse_sanity(data, now=1_000_000.0) == {

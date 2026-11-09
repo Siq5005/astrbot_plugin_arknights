@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      {{ base_css | safe }}
+
+      /* ── user bar ─────────────────────────────── */
+      .g-user {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: -10px 0 18px;
+        padding: 13px 16px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel-alt);
+      }
+      .g-user .g-avatar {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 2px solid var(--line-strong);
+        object-fit: cover;
+        flex: none;
+      }
+      .g-user .g-who {
+        min-width: 0;
+      }
+      .g-user .g-nm {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .g-user .g-sub {
+        font-size: 12px;
+        color: var(--label);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .g-user .g-secy {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 12px 5px 6px;
+        border-radius: 18px;
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        flex: none;
+      }
+      .g-user .g-secy img {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+      }
+      .g-user .g-secy .g-k {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .g-user .g-secy .g-v {
+        font-size: 13px;
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      /* ── one game card ─────────────────────────── */
+      .g-game {
+        display: flex;
+        margin-bottom: 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--panel-alt);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      }
+      .g-game:last-of-type {
+        margin-bottom: 0;
+      }
+
+      .g-info {
+        flex: 0 0 224px;
+        padding: 18px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        background: linear-gradient(160deg, rgba(255, 255, 255, 0.03), transparent),
+          var(--panel);
+      }
+      .g-badge {
+        display: inline-block;
+        align-self: flex-start;
+        padding: 3px 13px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 700;
+        color: #fff;
+      }
+      .g-badge.win {
+        background: #2f9e6b;
+      }
+      .g-badge.lose {
+        background: #b0483f;
+      }
+
+      .g-big {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+      }
+      .g-big .g-n {
+        font-size: 46px;
+        font-weight: 800;
+        line-height: 1;
+        color: var(--text);
+        letter-spacing: -1px;
+      }
+      .g-big .g-t {
+        font-size: 13px;
+        color: var(--label);
+      }
+
+      /* Strategy icon and difficulty are separate elements. */
+      .g-strat {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .g-strat img {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+      }
+      .g-strat .g-snm {
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .g-diff {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding-left: 4px;
+      }
+      .g-diff .g-dic {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .g-diff .g-dnm {
+        font-size: 15px;
+        color: var(--label);
+        font-weight: 600;
+      }
+      .g-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .g-meta .g-line {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        color: var(--label);
+      }
+      .g-meta .g-line .g-ic {
+        width: 16px;
+        text-align: center;
+        opacity: 0.75;
+      }
+
+      /* ── right column ──────────────────────────── */
+      .g-right {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .g-board {
+        padding: 14px 14px 12px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 8px;
+        flex: 1;
+      }
+      .g-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+      }
+      .g-cell {
+        position: relative;
+        aspect-ratio: 1;
+        border-radius: 7px;
+        overflow: hidden;
+        background: var(--panel);
+        border: 1px solid var(--line);
+      }
+      .g-cell img.g-face {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .g-cell .g-rom {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        padding: 0 4px;
+        border-radius: 3px;
+        background: rgba(0, 0, 0, 0.72);
+        font-size: 10px;
+        font-weight: 700;
+        color: #ffd479;
+        line-height: 15px;
+      }
+      .g-cell .g-eqs {
+        position: absolute;
+        left: 2px;
+        right: 2px;
+        bottom: 2px;
+        display: flex;
+        gap: 2px;
+      }
+      .g-cell .g-eqs img {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+      }
+
+      .g-bonds {
+        padding: 12px 14px;
+        border-top: 1px solid var(--line-soft);
+      }
+      .g-bonds h3 {
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      .g-bonds .g-blist {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+      }
+      .g-bond {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 11px 4px 5px;
+        border-radius: 18px;
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+      }
+      .g-bond.off {
+        opacity: 0.45;
+      }
+      .g-bond img {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+      }
+      .g-bond .g-bnm {
+        font-size: 12px;
+        color: var(--text);
+      }
+      .g-bond .g-blv {
+        font-size: 11px;
+        color: var(--accent-2);
+        font-weight: 600;
+      }
+
+      .g-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 9px 14px;
+        font-size: 11px;
+        color: var(--muted);
+        border-top: 1px solid var(--line-soft);
+        background: var(--panel);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card {{ card_class }}">
+      {% if garrison.user %}
+      <div class="g-user">
+        {% if garrison.user.avatar %}
+        <img class="g-avatar" src="{{ garrison.user.avatar }}" alt="" />
+        {% endif %}
+        <div class="g-who">
+          <div class="g-nm">{{ garrison.user.name or '—' }}</div>
+          <div class="g-sub">
+            uid {{ garrison.user.uid }} · Lv{{ garrison.user.level }} ·
+            {{ garrison.season_name }} · {{ garrison.version }} · {{ garrison.phase_name }}
+          </div>
+        </div>
+        {% if garrison.user.secretary_name %}
+        <div class="g-secy">
+          {% if garrison.user.secretary_icon %}
+          <img src="{{ garrison.user.secretary_icon }}" alt="" />
+          {% endif %}
+          <span class="g-k">助理</span>
+          <span class="g-v">{{ garrison.user.secretary_name }}</span>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% for r in garrison.records %}
+      <div class="g-game">
+        <div class="g-info">
+          <span class="g-badge {{ 'win' if r.success else 'lose' }}">{{ r.title }}</span>
+          <div class="g-big">
+            <span class="g-n">{{ r.pass_round }}</span>
+            <span class="g-t">{{ r.mode }}</span>
+          </div>
+          <div class="g-strat">
+            {% if r.band_icon %}<img src="{{ r.band_icon }}" alt="" />{% endif %}
+            <span class="g-snm">{{ r.strategy_name or '—' }}</span>
+          </div>
+          <div class="g-diff">
+            <span class="g-dic">◆</span>
+            <span class="g-dnm">{{ r.difficulty }}</span>
+          </div>
+          <div class="g-meta">
+            <div class="g-line"><span class="g-ic">◔</span><span>{{ r.start }}</span></div>
+            <div class="g-line"><span class="g-ic">⏱</span><span>{{ r.duration }}</span></div>
+          </div>
+        </div>
+
+        <div class="g-right">
+          <div class="g-board">
+            <div class="g-grid">
+              {% for u in r.squad %}
+              <div class="g-cell">
+                {% if u.avatar %}<img class="g-face" src="{{ u.avatar }}" alt="" />{% endif %}
+                <span class="g-rom">{{ u.roman }}</span>
+                {% if u.equips %}
+                <div class="g-eqs">
+                  {% for e in u.equips %}{% if e.icon %}<img src="{{ e.icon }}" alt="" />{% endif %}{% endfor %}
+                </div>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          {% if r.bonds %}
+          <div class="g-bonds">
+            <h3>核心盟约</h3>
+            <div class="g-blist">
+              {% for b in r.bonds %}
+              <div class="g-bond {{ '' if b.activate else 'off' }}">
+                {% if b.icon %}<img src="{{ b.icon }}" alt="" />{% endif %}
+                <span class="g-bnm">{{ b.name }}</span>
+                <span class="g-blv">Lv{{ b.layer }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="g-foot">
+            <span>奖杯 {{ r.trophy_before }}→{{ r.trophy_after }}</span>
+            <span>击杀 {{ r.kill_cnt }} · 金币 {{ r.coin_cost }}</span>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </body>
+</html>

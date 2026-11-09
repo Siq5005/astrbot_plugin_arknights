@@ -144,6 +144,7 @@ EXPECTED_COMMANDS = {
     "ark肉鸽",
     "ark任务",
     "ark公招",
+    "ark卫戍战绩",
     "ark抽卡分析",
     "ark抽卡记录",
     "ark抽卡重置",
@@ -1393,6 +1394,123 @@ async def main() -> int:
 
     results = await drive(plugin.show_help(StubEvent("/ark帮助")))
     check("ark帮助 renders the help card", results and results[0][0] == "chain")
+
+    # ── 卫戍协议战绩：出卡、解析与盟约层数 ──
+    GARRISON_RESOURCE = {
+        "seasons": [
+            {"seasonId": "act3autochess", "name": "规程", "phase": 0, "phaseName": ""}
+        ],
+        "versionInfo": {
+            "seasonId": "act3autochess",
+            "versionId": "V3_1",
+            "phase": 1,
+            "phaseName": "序列I",
+        },
+        "strategies": [
+            {
+                "strategyId": "band_weakness",
+                "iconUrl": "https://example.invalid/band.png",
+                "initiatorName": "陈",
+                "name": "以己之长",
+            }
+        ],
+        "bonds": [
+            {
+                "bondId": "yanShip",
+                "iconUrl": "https://example.invalid/bond.png",
+                "name": "炎",
+                "activeCount": 3,
+            }
+        ],
+        "chars": [
+            {
+                "charId": "char_1039_thorn2",
+                "avatarUrl": "https://example.invalid/thorn2.png",
+                "name": "引星棘刺",
+                "skills": [],
+                "modules": [],
+            }
+        ],
+        "items": [
+            {
+                "itemId": "chess_item_2_10_e_a",
+                "iconUrl": "https://example.invalid/item.png",
+                "name": "灵巧涡轮手套",
+            }
+        ],
+    }
+
+    def garrison_record(complete_state: int) -> dict:
+        return {
+            "id": f"r-{complete_state}",
+            "completeState": complete_state,
+            "trophyBefore": 15,
+            "trophyAfter": 16,
+            "coinCost": 74,
+            "killCnt": 104,
+            "bandId": "band_weakness",
+            "title": "",
+            "bondInfo": [{"bondId": "yanShip", "layer": 4, "activate": 1}],
+            "chessSquad": [
+                {
+                    "chessId": "chess_char_6_01_a",
+                    "equips": [{"equipId": "chess_item_2_10_e_a"}],
+                    "chessInfo": {
+                        "id": "chess_char_6_01_a",
+                        "charId": "char_1039_thorn2",
+                        "charName": "引星棘刺",
+                        "chessLevel": 6,
+                        "upgradeNum": 3,
+                    },
+                    "moduleId": "uniequip_002_thorn2",
+                    "skillId": "skchr_thorn2_2",
+                    "charId": "char_1039_thorn2",
+                }
+            ],
+            "passRound": 7,
+            "gameStartTs": "1794154580",
+            "gameEndTs": "1794156731",
+            "modeType": "MULTI",
+            "modeDifficulty": "HARD",
+            "versionId": "V3_1",
+            "activityId": "act3autochess",
+        }
+
+    garrison_player = {
+        "status": {
+            "uid": "1",
+            "name": "探姬#9315",
+            "level": 71,
+            "avatar": {"url": "https://example.invalid/avatar.png"},
+            "secretary": {"charId": "char_002_amiya", "skinId": "char_1001_amiya2#1"},
+        },
+    }
+
+    async def fake_garrison_resource(cred):
+        return GARRISON_RESOURCE
+
+    async def fake_garrison_history(cred, uid, season_id):
+        return [garrison_record(0), garrison_record(1)]
+
+    async def fake_garrison_player(cred, uid):
+        return garrison_player
+
+    async def fake_gamedata_ensure(force=False):
+        return True
+
+    plugin._player_cache.clear()
+    plugin.skland.get_garrison_resource = fake_garrison_resource
+    plugin.skland.get_garrison_history_log = fake_garrison_history
+    plugin.skland.get_player_info = fake_garrison_player
+    plugin._gamedata.ensure = fake_gamedata_ensure
+    plugin._gamedata.char_names = {"char_002_amiya": "阿米娅"}
+
+    results = await drive(plugin.show_garrison(StubEvent("/ark卫戍战绩")))
+    check(
+        "ark卫戍战绩 renders a card",
+        results and results[0][0] == "chain" and Path(results[0][1][0].path).is_file(),
+    )
+    plugin.skland.get_player_info = fake_player_info
 
     # Scheduler configuration
     plugin.config = {"sign_time": "03:30", "sanity_poll_interval": 5}

@@ -730,6 +730,54 @@ class SklandClient:
         self._check(data)
         return data.get("data") or {}
 
+    async def get_garrison_resource(self, cred: Credential) -> dict[str, Any]:
+        """Fetch the garrison guide resource tables for the current season.
+
+        Args:
+            cred: Skland credential pair.
+
+        Returns:
+            The ``data`` payload, holding ``seasons``, ``versionInfo``,
+            ``strategies``, ``bonds``, ``chars`` and ``items``.
+
+        Raises:
+            SklandError: When the request is rejected.
+        """
+        did = await self.get_device_id()
+        url = f"{self.zonai_base}/api/v1/game/garrison/guide/resource"
+        data = await self._request(
+            "GET", url, headers=self._signed_headers(url, "GET", None, cred, did)
+        )
+        self._check(data)
+        return data.get("data") or {}
+
+    async def get_garrison_history_log(
+        self, cred: Credential, uid: str, season_id: str
+    ) -> list[Any]:
+        """Fetch a role's recent garrison history records.
+
+        Args:
+            cred: Skland credential pair.
+            uid: Role uid; the server rejects the request without it.
+            season_id: Season id read from the guide resource.
+
+        Returns:
+            The ``data.records`` list, newest first.
+
+        Raises:
+            SklandError: When the request is rejected.
+        """
+        did = await self.get_device_id()
+        url = (
+            f"{self.zonai_base}/api/v1/game/garrison/guide/history-log"
+            f"?seasonId={season_id}&uid={uid}"
+        )
+        data = await self._request(
+            "GET", url, headers=self._signed_headers(url, "GET", None, cred, did)
+        )
+        self._check(data)
+        return (data.get("data") or {}).get("records") or []
+
     async def sign_arknights(
         self, cred: Credential, binding: UserBinding
     ) -> SignInResult:

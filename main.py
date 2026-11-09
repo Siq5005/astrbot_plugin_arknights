@@ -41,6 +41,7 @@ from .core.feed import DEFAULT_BASE_URL, FeedClient, FeedError, _body_html
 from .core.gacha import GachaClient, GachaError, analyze, format_record_time
 from .core.gacha_store import GachaStore
 from .core.gamedata import GameData
+from .core.garrison import GarrisonClient, GarrisonError, build_context
 from .core.hypergryph import HypergryphClient, HypergryphError
 from .core.operators import (
     build_operator_context,
@@ -53,7 +54,7 @@ from .core.skland import SignInResult, SklandClient, SklandError, UserBinding
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_arknights"
-PLUGIN_VERSION = "0.4.6"
+PLUGIN_VERSION = "0.5.0"
 
 # How often the health watchdog probes the self-hosted service, and how many
 # consecutive bad observations it takes to raise an alert. The service writes
@@ -117,6 +118,7 @@ ark剿灭              剿灭作战与本周合成玉
 ark肉鸽              集成战略收藏品与投资
 ark任务              每日/每周任务与周常奖励
 ark公招              公开招募栏位状态
+ark卫戍战绩          卫戍协议最近 3 局战绩
 
 【官方公告】
 ark公告              公告列表（`ark公告 <编号>` 看正文）
@@ -164,6 +166,7 @@ HELP_SECTIONS = [
             {"cmd": "ark肉鸽", "desc": "集成战略收藏品与投资"},
             {"cmd": "ark任务", "desc": "每日/每周任务与周常奖励"},
             {"cmd": "ark公招", "desc": "公开招募栏位状态"},
+            {"cmd": "ark卫戍战绩", "desc": "卫戍协议最近 3 局战绩"},
         ],
     },
     {
@@ -1414,6 +1417,75 @@ class ArknightsPlugin(Star):
             )
             return
         yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    # ── headhunting ───────────────────────────────────────────────────────
+
+    @filter.command("ark卫戍战绩")
+    async def show_garrison(self, event: AstrMessageEvent):
+        """Show the most recent garrison (卫戍协议) records as a card."""
+        resolved = await self._resolve_binding(event)
+        if not resolved:
+            yield event.plain_result(NO_BINDING_TEXT)
+            return
+        user, binding = resolved
+        try:
+            data = await self._player_data(user, binding)
+            authorization = await self.skland.get_authorization(
+                str(user.get("token") or "")
+            )
+            cred = await self.skland.get_credential(authorization)
+            resource, records = await GarrisonClient(self.skland).fetch(
+                cred, str(binding.get("uid") or "")
+            )
+        except (SklandError, GarrisonError) as exc:
+            yield event.plain_result(await self._report_query_error(event, exc))
+            return
+        # The assistant operator name often needs the plugin's own table (Amiya
+        # is absent from the guide resource), so make sure it is loaded.
+        await self._gamedata.ensure()
+        context = build_context(resource, records, data, self._gamedata.char_names)
+        if not context["records"]:
+            yield event.plain_result("没有查询到卫戍协议战绩。")
+            return
+        image = await self._render("garrison_recent.html", {"garrison": context})
+        if image is None:
+            yield event.plain_result(self._garrison_text(context))
+            return
+        yield event.chain_result([Image.fromFileSystem(str(image))])
+
+    @staticmethod
+    def _garrison_text(context: dict[str, Any]) -> str:
+        """Build the plain text fallback for the garrison card.
+
+        Args:
+            context: Context produced by ``build_context``.
+
+        Returns:
+            Multi-line summary text.
+        """
+        user = context["user"]
+        lines = [
+            f"卫戍协议战绩（最近 {len(context['records'])} 局）",
+            (
+                f"uid {user['uid']} · Lv{user['level']} · {context['season_name']} · "
+                f"{context['version']} · {context['phase_name']}"
+                + (
+                    f" · 助理 {user['secretary_name']}"
+                    if user["secretary_name"]
+                    else ""
+                )
+            ),
+        ]
+        for index, item in enumerate(context["records"], 1):
+            lines.append(
+                f"{index}. {item['title']} · 通关 {item['pass_round']} · "
+                f"{item['mode']} · {item['strategy_name']} · {item['difficulty']}"
+            )
+            lines.append(
+                f"   奖杯 {item['trophy_before']}→{item['trophy_after']} · "
+                f"击杀 {item['kill_cnt']} · 金币 {item['coin_cost']}"
+            )
+        return "\n".join(lines)
 
     # ── headhunting ───────────────────────────────────────────────────────
 
